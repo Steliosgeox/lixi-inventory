@@ -5,3 +5,10 @@
   from { transform: translateX(25px); opacity: 1; }
   to { transform: translateX(0); opacity: 1; }
 }
+
+/* Theme foregrounds and surfaces must switch together. Interpolating button
+   text from the old theme against the new surface briefly loses contrast.
+   Retain tactile motion and border feedback, but apply palette changes at once. */
+:root button {
+  transition-property: border-color, transform, box-shadow;
+}
