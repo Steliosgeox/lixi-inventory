@@ -22,3 +22,11 @@ export function exportProducts(rows: ProductOverview[]) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 export const dateLabel = (value: string | null) => value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat('el-GR', { day: '2-digit', month: 'short', timeZone: 'Europe/Athens' }).format(new Date(value)) : 'Χωρίς ημερομηνία'
+
+// Exact identifiers take precedence over fragments inside another barcode.
+export function searchProducts(rows: ProductOverview[], query: string) {
+  const q = normalize(query.trim())
+  if (!q) return rows
+  const exact = rows.filter(p => normalize(p.internal_code) === q || normalize(p.barcode ?? '') === q)
+  return exact.length ? exact : rows.filter(p => normalize(`${p.internal_code} ${p.description} ${p.barcode ?? ''}`).includes(q))
+}
