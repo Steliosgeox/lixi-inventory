@@ -272,10 +272,11 @@ function Brand({ large = false }: { large?: boolean }) {
 }
 
 function EntryScreen({ onToast, toast }: { onToast: (x: Toast) => void; toast: Toast }) {
-  const [mode, setMode] = useState<'quick' | 'email'>('quick')
+  const [mode, setMode] = useState<'quick' | 'email'>('email')
   const [emailMode, setEmailMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [ownerKey, setOwnerKey] = useState('')
   const [working, setWorking] = useState(false)
 
   async function createPrivateSession() {
@@ -291,12 +292,33 @@ function EntryScreen({ onToast, toast }: { onToast: (x: Toast) => void; toast: T
   async function submitEmail(e: FormEvent) {
     e.preventDefault()
     setWorking(true)
-    const result = emailMode === 'signin'
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password })
+
+    if (emailMode === 'signin') {
+      const result = await supabase.auth.signInWithPassword({ email, password })
+      setWorking(false)
+      if (result.error) onToast({ kind: 'error', text: result.error.message })
+      return
+    }
+
+    const bootstrap = await supabase.functions.invoke('leaksy-bootstrap-owner', {
+      body: { email, password, ownerKey },
+    })
+
+    if (bootstrap.error) {
+      setWorking(false)
+      onToast({ kind: 'error', text: 'Η δημιουργία ιδιοκτήτη απέτυχε. Έλεγξε το owner key και ξαναδοκίμασε.' })
+      return
+    }
+
+    const result = await supabase.auth.signInWithPassword({ email, password })
     setWorking(false)
-    if (result.error) onToast({ kind: 'error', text: result.error.message })
-    else if (!result.data.session) onToast({ kind: 'ok', text: 'Έλεγξε το email σου για επιβεβαίωση.' })
+    if (result.error) {
+      onToast({ kind: 'error', text: result.error.message })
+      return
+    }
+
+    setOwnerKey('')
+    onToast({ kind: 'ok', text: 'Ο λογαριασμός ιδιοκτήτη ενεργοποιήθηκε.' })
   }
 
   return (
@@ -318,7 +340,7 @@ function EntryScreen({ onToast, toast }: { onToast: (x: Toast) => void; toast: T
         <div className="entry-card-inner">
           <div className="eyebrow">LEAKSY ACCESS</div>
           <h2>Άνοιγμα χώρου εργασίας</h2>
-          <p className="muted">Η πρώτη εγκεκριμένη συνεδρία γίνεται ο ιδιοκτήτης του inventory.</p>
+          <p className="muted">Σύνδεση με email ή ασφαλής ενεργοποίηση του αρχικού ιδιοκτήτη.</p>
           {mode === 'quick' ? (
             <>
               <button className="primary-action" onClick={createPrivateSession} disabled={working}>
@@ -330,7 +352,10 @@ function EntryScreen({ onToast, toast }: { onToast: (x: Toast) => void; toast: T
             <form onSubmit={submitEmail} className="auth-form">
               <label>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} required /></label>
               <label>Κωδικός πρόσβασης<input type="password" minLength={8} value={password} onChange={e => setPassword(e.target.value)} required /></label>
-              <button className="primary-action" disabled={working}>{working ? 'Παρακαλώ…' : emailMode === 'signin' ? 'Σύνδεση' : 'Δημιουργία λογαριασμού'}</button>
+              {emailMode === 'signup' && (
+                <label>One-time owner key<input type="password" value={ownerKey} onChange={e => setOwnerKey(e.target.value)} required /></label>
+              )}
+              <button className="primary-action" disabled={working}>{working ? 'Παρακαλώ…' : emailMode === 'signin' ? 'Σύνδεση' : 'Δημιουργία ιδιοκτήτη'}</button>
               <button type="button" className="text-action" onClick={() => setEmailMode(x => x === 'signin' ? 'signup' : 'signin')}>
                 {emailMode === 'signin' ? 'Δεν έχω λογαριασμό' : 'Έχω ήδη λογαριασμό'}
               </button>
