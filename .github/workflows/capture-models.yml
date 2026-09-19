@@ -1,0 +1,77 @@
+name: Verify Capture Models
+on:
+  push:
+    branches: [feat/capture-engine]
+    paths: [.github/workflows/capture-models.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch official model archives and record origin
+        run: |
+          mkdir -p models/greek
+          curl -fL --retry 2 --max-time 120 'https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_det_onnx_infer.tar' -o models/detection.tar
+          if curl -fL --retry 1 --max-time 90 'https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/el_PP-OCRv5_mobile_rec_onnx_infer.tar' -o models/greek.tar; then
+            echo 'Official Greek ONNX archive available' > models/origin.txt
+          else
+            rm -f models/greek.tar
+            python - <<'PY'
+          import json, urllib.request, pathlib
+          repo='PaddlePaddle/el_PP-OCRv5_mobile_rec'
+          data=json.load(urllib.request.urlopen('https://huggingface.co/api/models/'+repo))
+          revision=data['sha']
+          pathlib.Path('models/origin.txt').write_text(repo+'@'+revision+'\n')
+          for file in ['inference.json','inference.pdiparams','inference.yml']:
+            urllib.request.urlretrieve('https://huggingface.co/'+repo+'/resolve/'+revision+'/'+file,'models/greek/'+file)
+          PY
+          fi
+      - name: Convert official Greek model only when necessary
+        run: |
+          if [ ! -f models/greek.tar ]; then
+            pip install 'paddlepaddle==3.2.1' 'paddle2onnx==2.1.0' 'onnxruntime==1.22.1'
+            paddle2onnx --model_dir models/greek --model_filename inference.json --params_filename inference.pdiparams --save_file models/greek/inference.onnx --opset_version 17 --enable_onnx_checker True
+            tar --format=ustar -cf models/greek.tar -C models/greek inference.onnx inference.yml
+          fi
+          python - <<'PY'
+          import tarfile,pathlib,hashlib,json
+          manifest={}
+          for name in ['detection','greek']:
+            path=pathlib.Path('models/'+name+'.tar')
+            with tarfile.open(path) as t:
+              names=t.getnames()
+              assert any(x.endswith('inference.onnx') for x in names), names
+              assert any(x.endswith('inference.yml') for x in names), names
+            manifest[name]={'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'bytes':path.stat().st_size}
+          pathlib.Path('models/checksums.json').write_text(json.dumps(manifest,indent=2))
+          PY
+      - name: Browser fallback assets and paper-scanner dependency
+        run: |
+          npm install --save-exact jscanify --no-audit --no-fund
+          mkdir -p fallback
+          for lang in ell eng; do curl -fL --retry 2 --max-time 120 "https://tessdata.projectnaptha.com/4.0.0_fast/$lang.traineddata.gz" -o "fallback/$lang.traineddata.gz"; done
+          tar -czf /tmp/paper-dependency.tgz node_modules/jscanify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capture-model-assets
+          path: |
+            models/*.tar
+            models/*.txt
+            models/*.json
+            fallback/
+            /tmp/paper-dependency.tgz
+          retention-days: 2
+          compression-level: 0
