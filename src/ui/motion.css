@@ -1,0 +1,7 @@
+/* Keep drawer text readable throughout its entrance, not only at the end.
+   An opacity fade lowered contrast during the first 200 ms on slower devices.
+   Translation preserves the entrance motion without fading the content. */
+@keyframes wk-slide {
+  from { transform: translateX(25px); opacity: 1; }
+  to { transform: translateX(0); opacity: 1; }
+}
