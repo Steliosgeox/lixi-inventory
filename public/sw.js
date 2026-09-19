@@ -1,37 +1,22 @@
-const CACHE = 'leaksy-shell-v3'
-const BASE = self.registration.scope
-const SHELL = [
-  BASE,
-  new URL('manifest.webmanifest', BASE).href,
-]
-
+// Cache only this application's static shell. Never intercept account or database requests.
+const CACHE = 'leaksy-static-v4'
+const scope = new URL(self.registration.scope)
+const shell = [scope.href, new URL('manifest.webmanifest', scope).href]
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE)
-      .then(cache => cache.addAll(SHELL))
-      .then(() => self.skipWaiting())
-  )
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(shell)).then(() => self.skipWaiting()))
 })
-
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
-      .then(() => self.clients.claim())
-  )
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('leaksy-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()))
 })
-
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return
-  event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        if (response.ok) {
-          const clone = response.clone()
-          caches.open(CACHE).then(cache => cache.put(event.request, clone))
-        }
-        return response
-      })
-      .catch(() => caches.match(event.request).then(hit => hit || caches.match(BASE)))
-  )
+  const req = event.request, url = new URL(req.url)
+  if (req.method !== 'GET' || url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname) || req.headers.has('authorization')) return
+  const navigation = req.mode === 'navigate'
+  const asset = /\.(?:js|css|woff2?|png|svg|ico|webmanifest)$/.test(url.pathname)
+  if (!navigation && !asset) return
+  const key = navigation ? scope.href : req
+  event.respondWith(fetch(req).then(response => {
+    if (response.ok && response.type === 'basic') event.waitUntil(caches.open(CACHE).then(cache => cache.put(key, response.clone())))
+    return response
+  }).catch(async () => (await caches.match(key)) || Response.error()))
 })
