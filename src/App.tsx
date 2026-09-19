@@ -345,15 +345,49 @@ function EntryScreen({ onToast, toast }: { onToast: (x: Toast) => void; toast: T
 }
 
 function LockedScreen({ session, onRefresh, onSignOut }: { session: Session; onRefresh: () => void; onSignOut: () => void }) {
+  const [ownerKey, setOwnerKey] = useState('')
+  const [working, setWorking] = useState(false)
+  const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+
+  async function claimOwner(e: React.FormEvent) {
+    e.preventDefault()
+    if (!ownerKey.trim()) return
+    setWorking(true)
+    setMessage(null)
+    const { error } = await supabase.rpc('claim_owner', { p_token: ownerKey.trim() })
+    setWorking(false)
+    if (error) {
+      setMessage({ kind: 'error', text: error.message })
+      return
+    }
+    setOwnerKey('')
+    setMessage({ kind: 'ok', text: 'Η ιδιοκτησία ενεργοποιήθηκε.' })
+    onRefresh()
+  }
+
   return (
     <div className="center-card-page">
       <div className="center-card">
         <Brand />
         <div className="lock-symbol">⌁</div>
         <h2>Η συνεδρία δεν έχει πρόσβαση.</h2>
-        <p>Αν αυτό είναι το πρώτο άνοιγμα, πάτησε επανέλεγχο. Διαφορετικά συνδέσου με τον λογαριασμό ιδιοκτήτη.</p>
-        <button className="primary-action" onClick={onRefresh}>Επανέλεγχος πρόσβασης</button>
-        <button className="text-action" onClick={onSignOut}>Αποσύνδεση</button>
+        <p>Αν είσαι ο αρχικός ιδιοκτήτης, χρησιμοποίησε το one-time owner key. Διαφορετικά ο διαχειριστής πρέπει να σε προσθέσει στο inventory.</p>
+        <form className="secure-form" onSubmit={claimOwner}>
+          <input
+            type="password"
+            autoComplete="one-time-code"
+            placeholder="One-time owner key"
+            value={ownerKey}
+            onChange={e => setOwnerKey(e.target.value)}
+            aria-label="One-time owner key"
+          />
+          <button className="primary-action" disabled={working || !ownerKey.trim()}>
+            {working ? 'Ενεργοποίηση…' : 'Ενεργοποίηση ιδιοκτήτη'}
+          </button>
+        </form>
+        {message && <div className={`inline-alert ${message.kind}`}>{message.text}</div>}
+        <button className="text-action" onClick={onRefresh}>Επανέλεγχος πρόσβασης</button>
+        <button className="text-action faint" onClick={onSignOut}>Αποσύνδεση</button>
         <code className="session-id">{session.user.id.slice(0, 8)}…</code>
       </div>
     </div>
