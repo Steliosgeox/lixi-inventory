@@ -354,7 +354,9 @@ function LockedScreen({ session, onRefresh, onSignOut }: { session: Session; onR
     if (!ownerKey.trim()) return
     setWorking(true)
     setMessage(null)
-    const { error } = await supabase.rpc('claim_owner', { p_token: ownerKey.trim() })
+    const { error } = await supabase.functions.invoke('leaksy-claim-owner', {
+      body: { token: ownerKey.trim() },
+    })
     setWorking(false)
     if (error) {
       setMessage({ kind: 'error', text: error.message })
