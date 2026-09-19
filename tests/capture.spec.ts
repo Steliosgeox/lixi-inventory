@@ -28,7 +28,7 @@ test('review is required and a double click produces one operation',async({page}
   await expect.poll(()=>writes).toBe(1)
   await expect(save).toBeDisabled()
 })
-test('offline draft survives reload and syncs after reconnection',async({page,context})=>{
+test('offline draft survives navigation and syncs after reconnection',async({page,context})=>{
   await page.getByRole('button',{name:'Τιμή ραφιού',exact:true}).click()
   await page.getByLabel('Κωδικός επιβεβαίωσης').fill('0000002');await page.getByLabel('Τιμή επιβεβαίωσης').fill('1,95')
   await context.setOffline(true)
@@ -54,11 +54,23 @@ test('real Greek OCR engine reads a generated fixture without remote OCR',async(
   await page.getByLabel('Φωτογραφία για OCR').setInputFiles({name:'synthetic-greek-label.png',mimeType:'image/png',buffer:Buffer.from(data,'base64')})
   await expect(page.getByRole('button',{name:'Ανάγνωση OCR',exact:true})).toBeEnabled()
   await page.getByRole('button',{name:'Ανάγνωση OCR',exact:true}).click()
-  await expect(page.locator('.capture-status')).toContainText('ολοκληρώθηκε',{timeout:120000})
+  await page.waitForFunction(() => document.querySelector('.capture-status')?.textContent?.includes('ολοκληρώθηκε') || document.querySelector('.capture-pane > [role=alert]'), undefined, { timeout: 120000 })
+  await expect(page.locator('.capture-pane > [role=alert]')).toHaveCount(0)
+  await expect(page.locator('.capture-status')).toContainText('ολοκληρώθηκε')
   await page.getByText('Κείμενο και προέλευση OCR', {exact:true}).click()
   await expect(page.locator('.capture-raw')).toContainText('0000002')
   await expect(page.locator('.capture-raw')).toContainText('ΜΟΥΣΤΑΡΔΑ')
   await expect(page.getByLabel('Τιμή επιβεβαίωσης')).toHaveValue('1.95')
   await expect(page.getByRole('button',{name:'Επιβεβαίωση και αποθήκευση',exact:true})).toBeDisabled()
   await page.screenshot({path:`test-results/${info.project.name}-capture-ocr.png`,fullPage:true})
+})
+
+test('real WASM barcode decoder reads a generated EAN13 image', async ({page}) => {
+  const {prepareZXingModule,writeBarcode} = await import('zxing-wasm/writer')
+  const {readFile} = await import('node:fs/promises')
+  await prepareZXingModule({overrides:{wasmBinary:new Uint8Array(await readFile('node_modules/zxing-wasm/dist/writer/zxing_writer.wasm'))},fireImmediately:true})
+  const fixture = await writeBarcode('5201050130807',{format:'EAN13',scale:4,addHRT:true})
+  expect(fixture.error).toBe('')
+  await page.getByLabel('Εικόνα barcode').setInputFiles({name:'synthetic-ean.png',mimeType:'image/png',buffer:Buffer.from(await fixture.image!.arrayBuffer())})
+  await expect(page.getByLabel('Κωδικός ή barcode')).toHaveValue('5201050130807',{timeout:20000})
 })
