@@ -1,7 +1,9 @@
-import { FormEvent, useEffect, useRef, useState } from 'react'
+import { FormEvent, useEffect, useRef, useState, lazy, Suspense } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X } from '@phosphor-icons/react'
 import Workspace, { ProductHistory } from './ui/Workspace'
+const CaptureCenter = lazy(() => import('./capture/CaptureCenter'))
+import { loadSnapshot, saveSnapshot, purgeSnapshots, flushDrafts } from './capture/offline'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import type { Location, Membership, ProductOverview } from './lib/types'
@@ -62,6 +64,10 @@ function App() {
     const version = ++loadVersion.current
     setLoadingData(true)
     try {
+      if (!navigator.onLine) {
+        const cached = await loadSnapshot(activeSession.user.id)
+        if (cached && version === loadVersion.current) { setMembership(cached.member); setProducts(cached.products); setLocations(cached.locations); setLastSynced(new Date(cached.saved)); return }
+      }
       const { data: member, error } = await supabase.from('memberships').select('store_id,user_id,role').eq('user_id', activeSession.user.id).maybeSingle()
       if (error) throw error
       if (version !== loadVersion.current) return
@@ -78,12 +84,26 @@ function App() {
       if (loc.error) throw loc.error
       if (version !== loadVersion.current) return
       setMembership(member as Membership); setProducts(productRows); setLocations((loc.data ?? []) as Location[]); setLastSynced(new Date())
+      await saveSnapshot(activeSession.user.id, member as Membership, productRows, (loc.data ?? []) as Location[]).catch(() => {})
     } catch (e) {
       if (version === loadVersion.current) setToast({ kind: 'error', text: e instanceof Error ? e.message : 'Δεν ήταν δυνατή η λήψη δεδομένων. Δοκίμασε ξανά.' })
     } finally {
       if (version === loadVersion.current) { setLoadingData(false); setWorkspaceReady(true) }
     }
   }
+
+  useEffect(() => {
+    if (!session || !membership) return
+    let active = true
+    const sync = async () => {
+      try { const count = await flushDrafts(session.user.id, membership.store_id); if (active && count) await loadWorkspace(session) } catch { /* pending records remain durable and visible in Capture */ }
+    }
+    const wake = () => { if (!document.hidden) void sync() }
+    const timer = setInterval(() => { void sync() }, 30000)
+    window.addEventListener('online', wake); document.addEventListener('visibilitychange', wake)
+    void sync()
+    return () => { active = false; clearInterval(timer); window.removeEventListener('online', wake); document.removeEventListener('visibilitychange', wake) }
+  }, [session?.user.id, membership?.store_id])
 
   async function saveProduct(draft: EditDraft) {
     if (!membership || saving || membership.role === 'viewer') return
@@ -119,7 +139,7 @@ function App() {
   return <>
     <Workspace products={products} locations={locations} membership={membership} email={session.user.email || ''}
       loading={loadingData} lastSynced={lastSynced} onRefresh={() => { void loadWorkspace() }} onEdit={p => { setToast(null); setEditDraft(toDraft(p)) }}
-      scan={membership.role === 'viewer' ? <div className="wk-empty">Ο λογαριασμός έχει πρόσβαση μόνο για ανάγνωση.</div> : <ScanCenter products={products} membership={membership} onSaved={async message => { setToast({ kind: 'ok', text: message }); await loadWorkspace() }} onError={text => setToast({ kind: 'error', text })} />}
+      scan={membership.role === 'viewer' ? <div className="wk-empty">Ο λογαριασμός έχει πρόσβαση μόνο για ανάγνωση.</div> : <Suspense fallback={<p role="status">Φόρτωση κέντρου σάρωσης…</p>}><CaptureCenter owner={session.user.id} products={products} membership={membership} onSaved={async message => { setToast({ kind: 'ok', text: message }); await loadWorkspace() }} onError={text => setToast({ kind: 'error', text })} /></Suspense>}
       settings={<Settings session={session} membership={membership} onToast={setToast} />}
       toast={toast && <button role={toast.kind === 'error' ? 'alert' : 'status'} className={`toast ${toast.kind}`} onClick={() => setToast(null)}>{toast.text}</button>} />
     {editDraft && <ProductEditor draft={editDraft} setDraft={setEditDraft} locations={locations} onClose={() => !saving && setEditDraft(null)} onSave={saveProduct} saving={saving} readOnly={membership.role === 'viewer'} error={toast?.kind === 'error' ? toast.text : null} />}
@@ -297,164 +317,6 @@ function LockedScreen({ session, onRefresh, onSignOut }: { session: Session; onR
   )
 }
 
-function ScanCenter({ products, membership, onSaved, onError }: { products: ProductOverview[]; membership: Membership; onSaved: (x: string) => void; onError: (x: string) => void }) {
-  const [mode, setMode] = useState<'barcode' | 'price' | 'document'>('barcode')
-  return (
-    <div className="scan-layout">
-      <section className="panel scan-menu">
-        <div className="scan-tabs">
-          <button className={mode === 'barcode' ? 'active' : ''} onClick={() => setMode('barcode')}><b>01</b><span>Barcode</span><small>EAN / QR / DataMatrix</small></button>
-          <button className={mode === 'price' ? 'active' : ''} onClick={() => setMode('price')}><b>02</b><span>Τιμή ραφιού</span><small>OCR + επιβεβαίωση</small></button>
-          <button className={mode === 'document' ? 'active' : ''} onClick={() => setMode('document')}><b>03</b><span>Κατάσταση Α4</span><small>Ελληνικό OCR</small></button>
-        </div>
-      </section>
-      <section className="panel scan-workspace">
-        {mode === 'barcode' && <BarcodeScanner products={products} />}
-        {mode === 'price' && <PriceOcr products={products} membership={membership} onSaved={onSaved} onError={onError} />}
-        {mode === 'document' && <DocumentOcr products={products} />}
-      </section>
-    </div>
-  )
-}
-
-function BarcodeScanner({ products }: { products: ProductOverview[] }) {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const controlsRef = useRef<any>(null)
-  const [running, setRunning] = useState(false)
-  const [code, setCode] = useState('')
-  const [found, setFound] = useState<ProductOverview | null>(null)
-  const [error, setError] = useState('')
-
-  useEffect(() => () => controlsRef.current?.stop?.(), [])
-
-  function resolve(value: string) {
-    const clean = value.trim()
-    setCode(clean)
-    setFound(products.find(p => p.barcode === clean || p.internal_code === clean) ?? null)
-  }
-
-  async function start() {
-    setError('')
-    try {
-      const { BrowserMultiFormatReader } = await import('@zxing/browser')
-      const reader = new BrowserMultiFormatReader()
-      setRunning(true)
-      controlsRef.current = await reader.decodeFromVideoDevice(undefined, videoRef.current!, result => {
-        if (result) {
-          resolve(result.getText())
-          controlsRef.current?.stop?.()
-          setRunning(false)
-        }
-      })
-    } catch (e) {
-      setRunning(false)
-      setError(e instanceof Error ? e.message : 'Η κάμερα δεν άνοιξε.')
-    }
-  }
-
-  return (
-    <div className="scan-card">
-      <div className="scan-heading"><span className="eyebrow">LIVE CAMERA</span><h3>Σάρωση προϊόντος</h3><p>Το barcode συγκρίνεται άμεσα με τη βάση Leaksy.</p></div>
-      <div className="camera-frame"><video ref={videoRef} muted playsInline /><div className="scan-line" /></div>
-      <div className="scan-actions">
-        <button className="primary-action compact" onClick={start} disabled={running}>{running ? 'Σάρωση…' : 'Άνοιγμα κάμερας'}</button>
-        <div className="manual-code"><input value={code} onChange={e => resolve(e.target.value)} aria-label="Κωδικός ή barcode" placeholder="ή γράψε κωδικό / EAN" /></div>
-      </div>
-      {error && <div className="inline-alert error">{error}</div>}
-      {code && <div className={found ? 'scan-result hit' : 'scan-result miss'}>{found ? <><span>ΒΡΕΘΗΚΕ</span><strong>{found.description}</strong><small>{found.internal_code} · {money(found.catalog_price)} · Θέση {found.location_code ?? '—'}</small></> : <><span>ΝΕΟΣ ΚΩΔΙΚΟΣ</span><strong>{code}</strong><small>Δεν υπάρχει ακόμη στη βάση.</small></>}</div>}
-    </div>
-  )
-}
-
-function PriceOcr({ products, membership, onSaved, onError }: { products: ProductOverview[]; membership: Membership; onSaved: (x: string) => void; onError: (x: string) => void }) {
-  const [working, setWorking] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [text, setText] = useState('')
-  const [code, setCode] = useState('')
-  const [price, setPrice] = useState('')
-  const product = products.find(x => x.internal_code === code || x.barcode === code)
-
-  async function process(file: File) {
-    setWorking(true); setProgress(3); setText(''); setCode(''); setPrice('')
-    try {
-      const { createWorker } = await import('tesseract.js')
-      const worker = await createWorker('ell+eng', 1, { logger: m => m.progress && setProgress(Math.round(m.progress * 100)) })
-      const result = await worker.recognize(file)
-      await worker.terminate()
-      const raw = result.data.text
-      setText(raw)
-      const codes = raw.match(/\b\d{7}\b/g) ?? []
-      const known = codes.find(c => products.some(p => p.internal_code === c))
-      if (known) setCode(known)
-      const prices = [...raw.matchAll(/(?:€\s*)?(\d{1,3})[,.](\d{2})\s*(?:€)?/g)].map(m => `${m[1]}.${m[2]}`)
-      if (new Set(prices).size === 1) setPrice(prices[0])
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'Αποτυχία OCR.')
-    } finally { setWorking(false) }
-  }
-
-  async function save() {
-    if (!product) return onError('Επίλεξε έγκυρο κωδικό προϊόντος.')
-    const value = Number(price.replace(',', '.'))
-    if (!price.trim() || !/^\d+(?:[.,]\d{1,2})?$/.test(price.trim()) || !Number.isFinite(value) || value < 0) return onError('Η τιμή δεν είναι έγκυρη.')
-    const { error } = await supabase.from('price_observations').insert({
-      store_id: membership.store_id,
-      product_id: product.product_id,
-      internal_code: product.internal_code,
-      observed_price: value,
-      source_type: 'manual',
-      source_ref: `Leaksy OCR ${new Date().toISOString()}`,
-      barcode: product.barcode,
-      verified: true,
-      confidence: null,
-    })
-    if (error) onError(error.message)
-    else onSaved(`Αποθηκεύτηκε ${money(value)} για ${product.internal_code}.`)
-  }
-
-  return (
-    <div className="scan-card">
-      <div className="scan-heading"><span className="eyebrow">LOCAL OCR</span><h3>Τιμή από φωτογραφία</h3><p>Το OCR τρέχει στη συσκευή και η τιμή αποθηκεύεται μόνο μετά από δική σου επιβεβαίωση.</p></div>
-      <label className="upload-zone"><input type="file" accept="image/*" capture="environment" onChange={e => e.target.files?.[0] && process(e.target.files[0])} /><span>＋</span><strong>Φωτογράφισε ετικέτα</strong><small>ή επίλεξε εικόνα</small></label>
-      {working && <div className="ocr-progress"><span style={{ width: `${progress}%` }} /><small>{progress}%</small></div>}
-      {(text || code || price) && <div className="ocr-review"><div className="review-grid"><label>Κωδικός<input value={code} onChange={e => setCode(e.target.value)} /></label><label>Τιμή ραφιού<input value={price} onChange={e => setPrice(e.target.value)} inputMode="decimal" /></label></div>{product && <div className="matched-product"><strong>{product.description}</strong><span>Κατάλογος {money(product.catalog_price)}</span></div>}<details><summary>OCR κείμενο</summary><pre>{text}</pre></details><button className="primary-action compact" onClick={save}>Επιβεβαίωση και αποθήκευση</button></div>}
-    </div>
-  )
-}
-
-function DocumentOcr({ products }: { products: ProductOverview[] }) {
-  const [working, setWorking] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [raw, setRaw] = useState('')
-  const [rows, setRows] = useState<Array<{ code: string; text: string; known: boolean }>>([])
-
-  async function process(file: File) {
-    setWorking(true); setProgress(2); setRows([]); setRaw('')
-    try {
-      const { createWorker } = await import('tesseract.js')
-      const worker = await createWorker('ell+eng', 1, { logger: m => m.progress && setProgress(Math.round(m.progress * 100)) })
-      const result = await worker.recognize(file)
-      await worker.terminate()
-      setRaw(result.data.text)
-      const parsed = result.data.text.split('\n').map(line => {
-        const code = line.match(/\b\d{7}\b/)?.[0]
-        return code ? { code, text: line.trim(), known: products.some(p => p.internal_code === code) } : null
-      }).filter(Boolean) as Array<{ code: string; text: string; known: boolean }>
-      setRows(parsed)
-    } finally { setWorking(false) }
-  }
-
-  return (
-    <div className="scan-card">
-      <div className="scan-heading"><span className="eyebrow">DOCUMENT OCR</span><h3>Κατάσταση απογραφής Α4</h3><p>Ανάγνωση ελληνικών κωδικών από φωτογραφία. Οι γραμμές μπαίνουν πρώτα σε review — ποτέ τυφλά στη βάση.</p></div>
-      <label className="upload-zone document"><input type="file" accept="image/*" capture="environment" onChange={e => e.target.files?.[0] && process(e.target.files[0])} /><span>▧</span><strong>Σάρωση σελίδας</strong><small>κράτα την κάμερα παράλληλη με το χαρτί</small></label>
-      {working && <div className="ocr-progress"><span style={{ width: `${progress}%` }} /><small>{progress}%</small></div>}
-      {!!rows.length && <div className="ocr-lines"><div className="line-header"><strong>{rows.length} κωδικοί εντοπίστηκαν</strong><span>{rows.filter(x => x.known).length} υπάρχουν στη βάση</span></div>{rows.map((r,i) => <div className="ocr-line" key={`${r.code}-${i}`}><code>{r.code}</code><span>{r.text}</span><b className={r.known ? 'known' : 'unknown'}>{r.known ? 'MATCH' : 'NEW'}</b></div>)}</div>}
-      {raw && <details className="raw-details"><summary>Πλήρες OCR</summary><pre>{raw}</pre></details>}
-    </div>
-  )
-}
-
 function Settings({ session, membership, onToast }: { session: Session; membership: Membership; onToast: (x: Toast) => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -496,8 +358,6 @@ function ProductEditor({ draft, setDraft, locations, onClose, onSave, saving, re
     </Dialog.Content></Dialog.Portal></Dialog.Root>
 }
 
-function Empty({ text }: { text: string }) { return <div className="empty-state">{text}</div> }
-function signedMoney(value: number | null) { if (value == null) return '—'; return `${value > 0 ? '+' : ''}${money(value)}` }
 function toDraft(p: ProductOverview): EditDraft { return { product: p, description: p.description, barcode: p.barcode ?? '', catalogPrice: p.catalog_price?.toString() ?? '', locationCode: p.location_code ?? '', rowLabel: p.row_label ?? '', numberLabel: p.number_label ?? '' } }
 
 export default App

@@ -6,3 +6,9 @@ dist/
 .vercel/
 .DS_Store
 *.log
+
+# Generated, checksum-pinned runtime assets (never commit binaries)
+public/capture/
+playwright-report/
+test-results/
+dependency-audit.json
