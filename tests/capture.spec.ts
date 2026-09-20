@@ -12,7 +12,10 @@ test('hardware scanner receives keyboard burst without focus',async({page})=>{
 test('permission rejection leaves scanner recoverable',async({page})=>{
   await page.evaluate(()=>{navigator.mediaDevices.getUserMedia=async()=>{throw new DOMException('Camera permission denied','NotAllowedError')}})
   await page.getByRole('button',{name:'Άνοιγμα κάμερας',exact:true}).click()
-  await expect(page.getByRole('alert')).toContainText('Camera permission denied')
+  await expect(page.getByRole('alert')).toContainText('Δεν επιτρέπεται η πρόσβαση στην κάμερα.')
+  await expect(page.getByRole('button',{name:'Άνοιγμα κάμερας',exact:true})).toBeEnabled()
+  await page.getByRole('button',{name:'Άνοιγμα κάμερας',exact:true}).click()
+  await expect(page.getByRole('alert')).toContainText('Επίτρεψε την κάμερα')
   await expect(page.getByRole('button',{name:'Άνοιγμα κάμερας',exact:true})).toBeEnabled()
 })
 test('review is required and a double click produces one operation',async({page})=>{
@@ -64,7 +67,6 @@ test('real Greek OCR engine reads a generated fixture without remote OCR',async(
   await expect(page.getByRole('button',{name:'Επιβεβαίωση και αποθήκευση',exact:true})).toBeDisabled()
   await page.screenshot({path:`test-results/${info.project.name}-capture-ocr.png`,fullPage:true})
 })
-
 test('real WASM barcode decoder reads a generated EAN13 image', async ({page}) => {
   const {prepareZXingModule,writeBarcode} = await import('zxing-wasm/writer')
   const {readFile} = await import('node:fs/promises')

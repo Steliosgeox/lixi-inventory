@@ -1,17 +1,18 @@
 name: CI
 on:
   push:
-    branches: [main, feat/workspace-redesign]
+    branches: [main, feat/capture-engine]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: checks-${{ github.ref }}
+  group: capture-ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,14 +22,29 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - run: npm run test:unit
       - run: npm run build
+      - name: Save the exact candidate for inspection
+        run: |
+          git rev-parse HEAD > tested-commit.txt
+          tar -czf /tmp/capture-candidate.tgz --exclude=.git --exclude=node_modules --exclude=dist --exclude=public/vendor --exclude=public/models .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capture-candidate
+          path: /tmp/capture-candidate.tgz
+          retention-days: 1
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:e2e
+      - name: Dependency audit report
+        if: always()
+        run: npm audit --json > dependency-audit.json || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ui-verification
+          name: capture-verification
           path: |
             playwright-report
             test-results
+            dependency-audit.json
+            tested-commit.txt
           retention-days: 3
