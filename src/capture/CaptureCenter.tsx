@@ -25,18 +25,21 @@ export default function CaptureCenter({products,membership,owner,onSaved,onError
   useEffect(()=>{if(!prepared){setPreview('');return}const url=URL.createObjectURL(prepared.blob);setPreview(url);return()=>URL.revokeObjectURL(url)},[prepared])
   function invalidate(){setResult(null);setReviewed(false);setCrop(null);setError('')}
   function cancel(){generation.current++;ocr.current?.cancel();ocr.current=null;setWorking(false);setStatus('Η εργασία ακυρώθηκε. Δεν αποθηκεύτηκε τιμή.')}
-  function changeMode(next:typeof mode){cancel();setMode(next);invalidate();setPrepared(null);setPrice('');setCode('');setFiles([])}
-  async function selectFile(file:File){cancel();invalidate();setPrepared(null);setFilename(file.name);setStatus('Προετοιμασία εικόνας…');setWorking(true);const gen=generation.current
+  // Invalidate stale results, but retain an idle worker and its loaded models.
+  // Cancellation of active inference, engine switches and unmount still release it.
+  function nextCaptureJob(){generation.current++;if(working){ocr.current?.cancel();ocr.current=null}setWorking(false);cropStart.current=null}
+  function changeMode(next:typeof mode){nextCaptureJob();setMode(next);invalidate();setPrepared(null);setPrice('');setCode('');setFiles([]);setFilename('');setStatus('')}
+  async function selectFile(file:File){nextCaptureJob();invalidate();setPrepared(null);setFilename(file.name);setStatus('Προετοιμασία εικόνας…');setWorking(true);const gen=generation.current
     try{const p=await prepareImage(file);if(gen===generation.current){setPrepared(p);setStatus('Εικόνα έτοιμη. Περιόρισε την περιοχή πριν την ανάγνωση.')}}catch(e){if(gen===generation.current)setError(e instanceof Error?e.message:'Η εικόνα δεν διαβάζεται.')}finally{if(gen===generation.current)setWorking(false)}
   }
   async function transform(rotate=false){if(!prepared)return;invalidate();setWorking(true);const gen=generation.current
     try{const p=await prepareImage(prepared.blob,rotate?undefined:crop??undefined,rotate?90:0);if(gen===generation.current)setPrepared(p)}catch(e){if(gen===generation.current)setError(e instanceof Error?e.message:'Η περικοπή απέτυχε.')}finally{if(gen===generation.current)setWorking(false)}
   }
-  async function recognize(){if(!prepared||working)return;invalidate();setWorking(true);setStatus('Προετοιμασία OCR…');const gen=generation.current
+  async function recognize(){if(!prepared||working)return;invalidate();setWorking(true);setStatus('Προετοιμασία OCR…');const gen=generation.current,started=performance.now()
     try{ocr.current??=new OcrEngine();const r=await ocr.current.recognize(prepared.blob,engineName,mode==='document',s=>{if(gen===generation.current)setStatus(s)})
       if(gen!==generation.current)return;setResult(r);const codes=codesFromOcr(r,lookup);if(codes.length===1)setCode(codes[0]);else setCode('')
       const ps=[...new Set(priceCandidates(r).filter(p=>!p.unitPrice).map(p=>p.cents))];setPrice(ps.length===1?(ps[0]/100).toFixed(2):'')
-      setStatus(`Η ανάγνωση ολοκληρώθηκε σε ${(r.elapsedMs/1000).toFixed(1)} s. Απαιτείται δικός σου έλεγχος.`)
+      setStatus(`Η ανάγνωση ολοκληρώθηκε σε ${((performance.now()-started)/1000).toFixed(1)} s. Απαιτείται δικός σου έλεγχος.`)
     }catch(e){if(gen===generation.current)setError((e instanceof Error?e.message:'Αποτυχία OCR.')+' Μπορείς να δοκιμάσεις το εναλλακτικό OCR ή να συμπληρώσεις χειροκίνητα.')}
     finally{if(gen===generation.current)setWorking(false)}
   }
@@ -47,7 +50,7 @@ export default function CaptureCenter({products,membership,owner,onSaved,onError
     busySave.current=true;setSaving(true);setError('')
     try{const draft:CaptureDraft={id:crypto.randomUUID(),owner,store:membership.store_id,product:product.product_id,code:product.internal_code,cents,unit:product.unit,observedAt:new Date().toISOString(),created:Date.now(),attempts:0,error:'',retryAt:0,state:'pending',image:prepared?.blob??null,
       metadata:{engine:result?.engine??'manual',model:result?.engine??null,elapsed_ms:result?Math.round(result.elapsedMs):null,sha256:prepared?.sha256??null,source_file:filename||null,reviewed:true,reviewed_at:new Date().toISOString(),ocr_suggested_codes:result?codesFromOcr(result,lookup):[],ocr_prices:candidates.map(p=>({cents:p.cents,score:p.line.score,box:p.line.box,unit_price:p.unitPrice})),quality_warnings:prepared?.warnings??[],raw_text:result?.lines.map(l=>l.text).join('\n').slice(0,24000)??null}}
-      await queueDraft(draft);setReviewed(false);setPrice('');setResult(null);setPrepared(null);setStatus('Αποθηκεύτηκε στη συσκευή. Η ουρά δείχνει την κατάσταση συγχρονισμού.');void sync()
+      await queueDraft(draft);setReviewed(false);setPrice('');setResult(null);setPrepared(null);setFilename('');setStatus('Αποθηκεύτηκε στη συσκευή. Η ουρά δείχνει την κατάσταση συγχρονισμού.');void sync()
     }catch(e){setError(e instanceof Error?e.message:'Η αποθήκευση απέτυχε. Κράτησε τη φωτογραφία και δοκίμασε ξανά.')}
     finally{busySave.current=false;setSaving(false)}
   }
