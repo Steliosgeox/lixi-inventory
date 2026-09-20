@@ -22,22 +22,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npm run test:unit
-      - run: npm run build
-      - name: Save the exact candidate for inspection
-        run: |
-          git rev-parse HEAD > tested-commit.txt
-          tar -czf /tmp/capture-candidate.tgz --exclude=.git --exclude=node_modules --exclude=dist --exclude=public/vendor --exclude=public/models .
-      - uses: actions/upload-artifact@v4
-        with:
-          name: capture-candidate
-          path: /tmp/capture-candidate.tgz
-          retention-days: 1
+      - name: Dependency security gate
+        run: npm audit --audit-level=high --json > dependency-audit.json
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Production build
+        run: npm run build
       - run: npx playwright install --with-deps chromium webkit
-      - run: npm run test:e2e
-      - name: Dependency audit report
-        if: always()
-        run: npm audit --json > dependency-audit.json || true
+      - name: Test the built application
+        run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -46,5 +39,4 @@ jobs:
             playwright-report
             test-results
             dependency-audit.json
-            tested-commit.txt
           retention-days: 3
