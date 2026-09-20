@@ -1,0 +1,27 @@
+name: Prepare iPhone test workspace
+on:
+  push:
+    branches: [fix/iphone-workspace]
+    paths: [.github/workflows/iphone-prep.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - name: Package exact source and development dependencies
+        run: tar -czf /tmp/iphone-workspace.tgz --exclude=.git --exclude=.github/workflows/iphone-prep.yml .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iphone-workspace
+          path: /tmp/iphone-workspace.tgz
+          compression-level: 0
+          retention-days: 1
