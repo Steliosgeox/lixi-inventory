@@ -1,0 +1,54 @@
+name: Verify iPhone workspace release
+on:
+  push:
+    branches: [fix/iphone-workspace]
+    paths:
+      - .github/workflows/iphone-finish.yml
+      - scripts/apply-iphone-refinement.py
+      - src/ui/mobile.css
+      - src/ui/viewport.ts
+      - tests/iphone.spec.ts
+permissions:
+  contents: write
+concurrency:
+  group: iphone-release
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply source changes against verified file hashes
+        run: python scripts/apply-iphone-refinement.py
+      - run: npm ci --no-audit --no-fund
+      - run: npm audit --audit-level=high --json > dependency-audit.json
+      - run: npm run test:unit
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:e2e
+      - name: Commit only the tested source, without transport scripts
+        run: |
+          rm scripts/apply-iphone-refinement.py .github/workflows/iphone-finish.yml .github/workflows/iphone-prep.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src tests index.html public/sw.js scripts .github/workflows
+          git commit -m 'Refine iPhone standalone safe areas, mobile catalogue, keyboard-safe dialogs and capture gestures'
+          git push origin HEAD:fix/iphone-workspace
+          git rev-parse HEAD > tested-commit.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: iphone-verification
+          path: |
+            playwright-report
+            test-results
+            dependency-audit.json
+            tested-commit.txt
+          retention-days: 3
