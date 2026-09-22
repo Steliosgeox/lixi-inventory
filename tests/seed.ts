@@ -6,7 +6,7 @@ export const store = '00000000-0000-4000-8000-000000000001', userId = '00000000-
 const names = ['Μουστάρδα απαλή 250 g','Κέτσαπ κλασική 500 g','Πέννες ολικής 500 g','Ρύζι Καρολίνα 500 g','Φακές ψιλές 500 g','Ζωμός λαχανικών 120 g']
 export const products = Array.from({ length: 48 }, (_, i) => ({
   product_id: `00000000-0000-4000-9000-${String(i + 1).padStart(12,'0')}`, store_id: store, internal_code: String(i+1).padStart(7,'0'),
-  barcode: i % 3 ? null : `520000000${String(i).padStart(4,'0')}`, description: `${names[i % 6]} / δοκιμή ${i+1}`,
+  barcode: i === 0 ? '5201050130807' : i % 3 ? null : `520000000${String(i).padStart(4,'0')}`, description: `${names[i % 6]} / δοκιμή ${i+1}`,
   unit: i % 8 === 0 ? 'Κιλό' : 'Τεμάχιο', catalog_price: 1.4 + (i % 6), shelf_price: i < 36 ? 1.4+(i % 6)+(i < 6 ? .25 : 0) : null,
   price_diff: i < 6 ? .25 : i < 36 ? 0 : null, price_status: i < 6 ? 'different' : i < 36 ? 'same' : 'unchecked',
   source_ref: i < 36 ? `test-photo-${i+1}.jpg` : null, observed_at: i < 36 ? '2026-09-18T12:00:00Z' : null,
