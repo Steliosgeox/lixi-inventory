@@ -19,7 +19,7 @@ export default function SmartScanPane({products,membership,owner,onSaved,onError
   const lookup=useMemo(()=>buildIndex(products),[products])
   const video=useRef<HTMLVideoElement>(null),decodeCanvas=useRef<HTMLCanvasElement|null>(null),ocrCanvas=useRef<HTMLCanvasElement|null>(null)
   const decoder=useRef<ReturnType<typeof barcodeClient>|null>(null),ocr=useRef<OcrEngine|null>(null),stream=useRef<MediaStream|null>(null)
-  const generation=useRef(0),timer=useRef<ReturnType<typeof setTimeout>|undefined>(),frameId=useRef<number|null>(null),ocrBusy=useRef(false),lastOcr=useRef(0)
+  const generation=useRef(0),timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined),frameId=useRef<number|null>(null),ocrBusy=useRef(false),lastOcr=useRef(0)
   const rawConsensus=useRef({value:'',at:0,hits:0})
   const [running,setRunning]=useState(false),[starting,setStarting]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('Άνοιξε την κάμερα και στόχευσε μία ετικέτα ή συσκευασία.')
   const [product,setProduct]=useState<ProductOverview|null>(null),[scanned,setScanned]=useState(''),[price,setPrice]=useState(''),[expiry,setExpiry]=useState(''),[expiryKind,setExpiryKind]=useState<ExpiryKind>('expiry'),[expirySource,setExpirySource]=useState<'gs1'|'ocr'|'manual'|null>(null),[lot,setLot]=useState(''),[quantity,setQuantity]=useState('1')
