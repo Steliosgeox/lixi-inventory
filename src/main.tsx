@@ -4,6 +4,11 @@ import App from './App'
 import './styles.css'
 import './ui/workspace.css'
 import './ui/motion.css'
+import './ui/mobile.css'
+import { installViewportEnvironment } from './ui/viewport'
+
+const disposeViewport = installViewportEnvironment()
+if (import.meta.hot) import.meta.hot.dispose(disposeViewport)
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
