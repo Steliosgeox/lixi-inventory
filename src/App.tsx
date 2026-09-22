@@ -345,15 +345,15 @@ function ProductEditor({ draft, setDraft, locations, onClose, onSave, saving, re
     <Dialog.Content className="wk-drawer" onEscapeKeyDown={e => { if (saving) e.preventDefault() }} onInteractOutside={e => { if (saving) e.preventDefault() }}>
       <div className="wk-drawer-head"><div><p>ΠΡΟΪΟΝ / <code>{draft.product.internal_code}</code></p><Dialog.Title>Καρτέλα προϊόντος</Dialog.Title><Dialog.Description className="sr-only">Περιγραφή, τιμές, θέση και ιστορικό προϊόντος.</Dialog.Description></div><Dialog.Close className="wk-icon" disabled={saving} aria-label="Κλείσιμο προϊόντος"><X size={19} /></Dialog.Close></div>
       <form className="wk-drawer-body" onSubmit={e => { e.preventDefault(); if (!readOnly) onSave(draft) }}>
-        <fieldset disabled={saving || readOnly} style={{ border: 0, padding: 0, margin: 0 }}>
+        <div className="wk-drawer-scroll"><fieldset disabled={saving || readOnly} style={{ border: 0, padding: 0, margin: 0 }}>
           <label>Περιγραφή<textarea required value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} /></label>
           <div className="form-grid"><label>Barcode<input value={draft.barcode} onChange={e => setDraft({ ...draft, barcode: e.target.value })} /></label><label>Τιμή καταλόγου (€)<input inputMode="decimal" value={draft.catalogPrice} onChange={e => setDraft({ ...draft, catalogPrice: e.target.value })} /></label></div>
           <div className="form-grid three"><label>Θέση<select value={draft.locationCode} onChange={e => setDraft({ ...draft, locationCode: e.target.value })}><option value="">Χωρίς θέση</option>{locations.map(x => <option key={x.id} value={x.code}>{x.name}</option>)}</select></label><label>Σειρά<input value={draft.rowLabel} onChange={e => setDraft({ ...draft, rowLabel: e.target.value })} /></label><label>Αριθμός<input value={draft.numberLabel} onChange={e => setDraft({ ...draft, numberLabel: e.target.value })} /></label></div>
         </fieldset>
         <div className="read-only-card"><span>Τελευταία τιμή ραφιού · {draft.product.unit || '—'}</span><strong>{money(draft.product.shelf_price)}</strong><small>{draft.product.source_ref || 'Χωρίς καταγραφή ραφιού'}</small></div>
-        {!readOnly && <button type="submit" className="wk-button primary" disabled={saving}>{saving ? 'Αποθήκευση…' : 'Αποθήκευση αλλαγών'}</button>}
         {error && <p role="alert" className="wk-form-error">{error}</p>}
-        <ProductHistory product={draft.product} />
+        <ProductHistory product={draft.product} /></div>
+        <div className="wk-drawer-actions">{!readOnly && <button type="submit" className="wk-button primary" disabled={saving}>{saving ? 'Αποθήκευση…' : 'Αποθήκευση αλλαγών'}</button>}<button type="button" className="wk-button" disabled={saving} onClick={onClose}>Κλείσιμο</button></div>
       </form>
     </Dialog.Content></Dialog.Portal></Dialog.Root>
 }
