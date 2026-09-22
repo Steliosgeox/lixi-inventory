@@ -1,0 +1,21 @@
+name: Package release source
+on:
+  push:
+    branches: [feat/jev-decisions]
+    paths: [.github/workflows/release-source.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: tar -czf /tmp/lixi-current.tgz --exclude=.git .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lixi-current
+          path: /tmp/lixi-current.tgz
+          retention-days: 1
