@@ -8,7 +8,7 @@ export type CaptureDraft = {
 }
 export type SmartCaptureDraft = {
   id:string; owner:string; store:string; product:string; code:string; unit:string;
-  priceCents:number|null; expiry:string|null; expiryKind:'expiry'|'best_before'|'sell_by'|'unknown'|null;
+  priceCents:number|null; observedAt:string; expiry:string|null; expiryKind:'expiry'|'best_before'|'sell_by'|'unknown'|null;
   lot:string; quantity:number|null; locationId:string|null; expirySource:'gs1'|'ocr'|'manual'|null;
   created:number; metadata:Record<string,unknown>; image:Blob|null;
   state:'pending'|'error'; attempts:number; error:string; retryAt:number;
@@ -98,7 +98,7 @@ export function flushSmartDrafts(owner:string,store:string):Promise<number>{
         const current=(await supabase.auth.getSession()).data.session
         if(current?.user.id!==owner)break
         const {error}=await supabase.rpc('commit_smart_capture',{
-          p_id:draft.id,p_store:store,p_product:draft.product,p_unit:draft.unit,
+          p_id:draft.id,p_store:store,p_product:draft.product,p_unit:draft.unit,p_observed_at:draft.observedAt,
           p_price_cents:draft.priceCents,p_expiry:draft.expiry,p_expiry_kind:draft.expiryKind,
           p_lot:draft.lot,p_quantity:draft.quantity,p_location:draft.locationId,
           p_expiry_source:draft.expirySource,p_evidence:evidence,p_metadata:draft.metadata
