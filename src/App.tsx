@@ -59,10 +59,10 @@ function App() {
     void loadWorkspace(session)
   }, [session?.user.id])
 
-  async function loadWorkspace(activeSession = session) {
+  async function loadWorkspace(activeSession = session, quiet = false) {
     if (!activeSession) return
     const version = ++loadVersion.current
-    setLoadingData(true)
+    if (!quiet) setLoadingData(true)
     try {
       if (!navigator.onLine) {
         const cached = await loadSnapshot(activeSession.user.id)
@@ -139,7 +139,7 @@ function App() {
   return <>
     <Workspace products={products} locations={locations} membership={membership} email={session.user.email || ''}
       loading={loadingData} lastSynced={lastSynced} onRefresh={() => { void loadWorkspace() }} onEdit={p => { setToast(null); setEditDraft(toDraft(p)) }}
-      scan={membership.role === 'viewer' ? <div className="wk-empty">Ο λογαριασμός έχει πρόσβαση μόνο για ανάγνωση.</div> : <Suspense fallback={<p role="status">Φόρτωση κέντρου σάρωσης…</p>}><CaptureCenter owner={session.user.id} products={products} membership={membership} onSaved={async message => { setToast({ kind: 'ok', text: message }); await loadWorkspace() }} onError={text => setToast({ kind: 'error', text })} /></Suspense>}
+      scan={membership.role === 'viewer' ? <div className="wk-empty">Ο λογαριασμός έχει πρόσβαση μόνο για ανάγνωση.</div> : <Suspense fallback={<p role="status">Φόρτωση κέντρου σάρωσης…</p>}><CaptureCenter owner={session.user.id} products={products} membership={membership} onSaved={async message => { setToast({ kind: 'ok', text: message }); await loadWorkspace(session, true) }} onError={text => setToast({ kind: 'error', text })} /></Suspense>}
       settings={<Settings session={session} membership={membership} onToast={setToast} />}
       toast={toast && <button role={toast.kind === 'error' ? 'alert' : 'status'} className={`toast ${toast.kind}`} onClick={() => setToast(null)}>{toast.text}</button>} />
     {editDraft && <ProductEditor draft={editDraft} setDraft={setEditDraft} locations={locations} onClose={() => !saving && setEditDraft(null)} onSave={saveProduct} saving={saving} readOnly={membership.role === 'viewer'} error={toast?.kind === 'error' ? toast.text : null} />}

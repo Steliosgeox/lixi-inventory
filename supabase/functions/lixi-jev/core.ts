@@ -21,7 +21,7 @@ export function validateInput(v:unknown):CaptureInput {
  for(const l of v.ocr.lines)if(!object(l)||typeof l.text!=='string'||l.text.length>600||!(l.score===null||(finite(l.score)&&l.score>=0&&l.score<=1))||!object(l.box)||!['x','y','width','height'].every(k=>finite(l.box[k])&&l.box[k]>=0))throw new Error('Invalid OCR line')
  if(!Array.isArray(v.barcodes)||v.barcodes.length>8||!v.barcodes.every((b:any)=>object(b)&&typeof b.text==='string'&&b.text.length<=512&&typeof b.format==='string'&&b.format.length<40&&(b.symbologyIdentifier===undefined||/^\][A-Za-z0-9]{2}$/.test(b.symbologyIdentifier))))throw new Error('Invalid barcode input')
  if(JSON.stringify(v).length>60000)throw new Error('Capture too large')
- return {id:v.id,storeId:v.storeId,observedAt:v.observedAt,imageHash:v.imageHash,evidencePath:v.evidencePath,ocr:v.ocr,barcodes:v.barcodes}
+ return {id:v.id,storeId:v.storeId,observedAt:v.observedAt,imageHash:v.imageHash,evidencePath:v.evidencePath,ocr:{engine:v.ocr.engine,width:v.ocr.width,height:v.ocr.height,elapsedMs:finite(v.ocr.elapsedMs)&&v.ocr.elapsedMs>=0?v.ocr.elapsedMs:0,lines:v.ocr.lines as Line[]},barcodes:v.barcodes.map((b:any)=>({text:b.text,format:b.format,...(b.symbologyIdentifier?{symbologyIdentifier:b.symbologyIdentifier}:{})}))}
 }
 export function validGtin(s:string):boolean {if(!/^(?:\d{8}|\d{12}|\d{13}|\d{14})$/.test(s))return false;let sum=0;for(let i=s.length-2,w=3;i>=0;i--,w=4-w)sum+=Number(s[i])*w;return (10-sum%10)%10===Number(s.at(-1))}
 const norm=(s:string)=>s.padStart(14,'0')
@@ -37,6 +37,7 @@ export function buildBundle(input:CaptureInput,products:Product[],structured:Str
  const decoded=[...new Set([...input.barcodes.filter(b=>validGtin(b.text)).map(b=>b.text),...structured.map(b=>b.gtin).filter((s):s is string=>!!s&&validGtin(s))])]
  const matching=products.filter(p=>codes.includes(p.internal_code)||(p.barcode&&decoded.some(b=>norm(b)===norm(p.barcode!))))
  if(matching.length>1||new Set(decoded.map(norm)).size>1)blocking.push('multiple_products')
+ if(new Set(structured.filter(b=>b.expiryDate||b.lot).map(b=>b.expiryDate+':'+b.lot)).size>1)blocking.push('multiple_batches')
  const items:Record<string,Item>={};for(const p of matching.slice(0,8))items['item_'+p.internal_code]={...p,new_product:false}
  // Only observed store codes are eligible for a new catalogue record. Never derive a store code from a GTIN.
  if(!matching.length&&codes.length===1&&decoded.length===1){
@@ -75,6 +76,7 @@ export function buildBundle(input:CaptureInput,products:Product[],structured:Str
 function selection(answers:Record<string,any>,name:string,values:Record<string,unknown>,reasons:string[]):string|null {
  const a=answers[name],allowed=['none',...Object.keys(values)]
  if(!object(a)||a.type!=='choice'||!allowed.includes(a.choice)||!finite(a.confidence)||a.confidence<0||a.confidence>1||!object(a.probabilities)||Object.keys(a.probabilities).length!==allowed.length||!allowed.every(k=>finite(a.probabilities[k])&&a.probabilities[k]>=0&&a.probabilities[k]<=1)||Math.abs(allowed.reduce((s,k)=>s+a.probabilities[k],0)-1)>.02){reasons.push('invalid_'+name+'_response');return null}
+ if(a.probabilities[a.choice]<Math.max(...Object.values(a.probabilities) as number[])){reasons.push('invalid_'+name+'_response');return null}
  if(a.probabilities[a.choice]<.98||a.confidence<.90){if(Object.keys(values).length)reasons.push('uncertain_'+name);return null}
  return a.choice==='none'?null:a.choice
 }
@@ -88,6 +90,12 @@ export function decide(bundle:Bundle,raw:unknown):Decision {
  if(date?.value.kind==='unknown')reasons.push('unknown_date_kind')
  if(date){const delta=Date.parse(date.value.iso+'T00:00:00Z')-Date.parse(bundle.input.observedAt);if(delta< -366*86400000||delta>5500*86400000)reasons.push('date_out_of_range')}
  if(p&&!p.unit)reasons.push('missing_unit')
+ if(p){
+  const decodedMatch=!!p.barcode&&bundle.decoded.some(b=>norm(b)===norm(p.barcode!))
+  const exactCode=bundle.input.ocr.lines.some(l=>(l.score??0)>=.97&&[...l.text.matchAll(/(?<!\d)\d{7}(?!\d)/g)].some(m=>m[0]===p.internal_code))
+  if(!decodedMatch&&!exactCode)reasons.push('low_ocr_identifier')
+ }
+
  if(p&&bundle.decoded.length&&p.barcode&&!bundle.decoded.some(b=>norm(b)===norm(p.barcode!)))reasons.push('barcode_conflict')
  if(p&&price&&p.catalog_price!=null&&p.catalog_price>0&&(price.value/100>p.catalog_price*3||price.value/100<p.catalog_price*.25))reasons.push('large_price_change')
  const plan=p?{product_id:p.new_product?null:p.id,product_updated_at:p.new_product?null:p.updated_at,new_product:p.new_product,internal_code:p.internal_code,barcode:bundle.decoded[0]??p.barcode,description:p.description,unit:p.unit,price_cents:price?.value??null,expiry_date:date?.value.iso??null,expiry_kind:date?.value.kind??null,lot_number:lot?.value??null,location_id:null}:null

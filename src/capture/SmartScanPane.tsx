@@ -26,12 +26,16 @@ export default function SmartScanPane({products,membership,owner,onSaved,onError
   const [reviewed,setReviewed]=useState(false),[saving,setSaving]=useState(false),[priceOptions,setPriceOptions]=useState<number[]>([]),[expiryOptions,setExpiryOptions]=useState<ExpiryCandidate[]>([]),[evidence,setEvidence]=useState<Blob|null>(null),[lastOcrText,setLastOcrText]=useState(''),[gs1,setGs1]=useState<Gs1Capture|null>(null),[pending,setPending]=useState<SmartCaptureDraft[]>([])
   const [hardware,setHardware]=useState(false),[caps,setCaps]=useState<ExtendedCapabilities>({}),[zoom,setZoom]=useState(1),[torch,setTorch]=useState(false),[decodeMs,setDecodeMs]=useState<number|null>(null),[ocrMs,setOcrMs]=useState<number|null>(null)
 
-  const dirty=price.trim()!==''||expiry.trim()!==''||lot.trim()!==''
+  const dirty=price.trim()!==''||expiry.trim()!==''
+  const latest=useRef({product,price,expiry,expirySource,lot,reviewed,saving});latest.current={product,price,expiry,expirySource,lot,reviewed,saving}
+  const revision=useRef(0),saveLock=useRef(false)
+  const [manualCode,setManualCode]=useState('')
   const exactPrice=price.trim()?parseCents(price):null
   const canSave=!!product&&dirty&&(price.trim()===''||exactPrice!==null)&&(!expiry||/^\d{4}-\d{2}-\d{2}$/.test(expiry))&&reviewed&&!saving
 
   function revokeReview(){setReviewed(false)}
   function resetItem(){
+    revision.current++;setManualCode('')
     setProduct(null);setScanned('');setPrice('');setExpiry('');setExpiryKind('expiry');setExpirySource(null);setLot('');setQuantity('1');setPriceOptions([]);setExpiryOptions([]);setEvidence(null);setLastOcrText('');setGs1(null);setReviewed(false);setError('')
     rawConsensus.current={value:'',at:0,hits:0};setStatus('Έτοιμο για το επόμενο προϊόν.')
   }
@@ -50,7 +54,7 @@ export default function SmartScanPane({products,membership,owner,onSaved,onError
     let cancelled=false,dispose:(()=>void)|undefined
     void import('onscan.js').then(({default:onScan})=>{
       if(cancelled)return
-      onScan.attachTo(document,{suffixKeyCodes:[13],minLength:7,avgTimeByChar:45,timeBeforeScanTest:120,ignoreIfFocusOn:'input,textarea,select,[contenteditable="true"]',reactToPaste:false,preventDefault:false,stopPropagation:false,
+      onScan.attachTo(document,{keyCodeMapper:(e:KeyboardEvent)=>e.key.length===1?e.key:'',suffixKeyCodes:[13],minLength:7,avgTimeByChar:45,timeBeforeScanTest:120,ignoreIfFocusOn:'input,textarea,select,[contenteditable="true"]',reactToPaste:false,preventDefault:false,stopPropagation:false,
         onScan:(raw:string)=>{if(!cancelled)void consumeBarcode({text:raw,format:'Hardware'},true)}})
       dispose=()=>onScan.detachFrom(document)
     }).catch(()=>setError('Δεν φορτώθηκε η υποστήριξη scanner χειρός.'))
@@ -85,13 +89,19 @@ export default function SmartScanPane({products,membership,owner,onSaved,onError
     if(parsed.lot){setLot(parsed.lot);revokeReview()}
   }
   async function consumeBarcode(code:Decoded,confirmed=false){
+    if(latest.current.reviewed||latest.current.saving)return
+    const rev=revision.current
     const raw=code.text.trim()
     if(!raw||(!confirmed&&!rawAccepted(raw,performance.now())))return
     setScanned(raw)
     const parsed=await parseGs1Scan(code)
-    if(parsed)applyGs1(parsed)
+    if(rev!==revision.current)return
     const candidates=parsed?.gtin?lookup(parsed.gtin):lookup(raw)
-    if(candidates.length===1){lock(candidates[0],parsed?'GS1':'barcode');navigator.vibrate?.(30)}
+    if(candidates.length===1){
+      if(latest.current.product&&latest.current.product.product_id!==candidates[0].product_id){setError('Διαφορετικό προϊόν. Πάτησε Επόμενο πριν συνεχίσεις.');return}
+      if(parsed&&!latest.current.expiry)applyGs1(parsed)
+      if(latest.current.product?.product_id!==candidates[0].product_id){lock(candidates[0],parsed?'GS1':'barcode');navigator.vibrate?.(30)}
+    }
     else if(candidates.length>1)setError('Ο κωδικός αντιστοιχεί σε περισσότερα από ένα προϊόντα.')
     else if(identifier(raw).valid)setStatus('Ο κωδικός διαβάστηκε αλλά δεν έχει αντιστοίχιση. Συνεχίζω με OCR για κωδικό είδους.')
   }
@@ -104,25 +114,29 @@ export default function SmartScanPane({products,membership,owner,onSaved,onError
     return new Promise((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(new Error('Δεν δημιουργήθηκε εικόνα OCR.')),'image/jpeg',.84))
   }
   function consumeOcr(result:OcrResult,blob:Blob){
+    if(latest.current.reviewed||latest.current.saving)return
+    const current=latest.current
+    const found=codesFromOcr(result,lookup)
+    if(found.length>1||(current.product&&found.length===1&&found[0]!==current.product.internal_code)){setError('Ασυμφωνία προϊόντος. Η ανάγνωση δεν εφαρμόστηκε.');return}
     setOcrMs(Math.round(result.elapsedMs));setLastOcrText(result.lines.map(x=>x.text).join('\n').slice(0,12000))
     const codes=codesFromOcr(result,lookup)
     if(codes.length===1){const m=lookup(codes[0]);if(m.length===1)lock(m[0],'OCR κωδικός')}
     const allPrices=priceCandidates(result).filter(x=>!x.unitPrice)
     const hinted=allPrices.filter(x=>PRICE_HINT.test(x.line.text)),source=hinted.length?hinted:allPrices
     const unique=[...new Set(source.map(x=>x.cents))].slice(0,6);setPriceOptions(unique)
-    if(hinted.length&&new Set(hinted.map(x=>x.cents)).size===1&&!price){setPrice((hinted[0].cents/100).toFixed(2));setEvidence(blob);revokeReview()}
+    if(hinted.length&&new Set(hinted.map(x=>x.cents)).size===1&&!current.price){setPrice((hinted[0].cents/100).toFixed(2));setEvidence(blob);revokeReview()}
     const ex=expiryCandidates(result);setExpiryOptions(ex.slice(0,5))
-    if((!expiry||expirySource!=='gs1')&&new Set(ex.map(x=>x.kind+':'+x.iso)).size===1&&ex[0]){setExpiry(ex[0].iso);setExpiryKind(ex[0].kind);setExpirySource('ocr');setEvidence(blob);revokeReview()}
-    const lots=lotCandidates(result);if(!lot&&lots.length===1){setLot(lots[0].value);setEvidence(blob);revokeReview()}
+    if(!current.expiry&&new Set(ex.map(x=>x.kind+':'+x.iso)).size===1&&ex[0]){setExpiry(ex[0].iso);setExpiryKind(ex[0].kind);setExpirySource('ocr');setEvidence(blob);revokeReview()}
+    const lots=lotCandidates(result);if(!current.lot&&lots.length===1){setLot(lots[0].value);setEvidence(blob);revokeReview()}
   }
   async function maybeOcr(v:HTMLVideoElement,gen:number){
-    const now=performance.now();if(ocrBusy.current||now-lastOcr.current<1200||!v.videoWidth)return
+    const rev=revision.current;const now=performance.now();if(latest.current.reviewed||latest.current.saving||ocrBusy.current||now-lastOcr.current<1200||!v.videoWidth)return
     ocrBusy.current=true;lastOcr.current=now
     try{
       const blob=await jpegFrame(v);if(gen!==generation.current)return
       ocr.current??=new OcrEngine()
       const result=await ocr.current.recognize(blob,'paddle',false,s=>{if(gen===generation.current)setStatus(s)})
-      if(gen===generation.current)consumeOcr(result,blob)
+      if(gen===generation.current&&rev===revision.current)consumeOcr(result,blob)
     }catch{if(gen===generation.current)setStatus('Το OCR δεν βρήκε ασφαλή πεδία σε αυτό το καρέ. Συνέχισε να στοχεύεις.')}
     finally{ocrBusy.current=false}
   }
@@ -171,14 +185,16 @@ export default function SmartScanPane({products,membership,owner,onSaved,onError
     catch{setError('Η κάμερα δεν υποστηρίζει αυτή τη ρύθμιση.')}
   }
   async function confirm(){
-    if(!canSave||!product)return
+    if(!canSave||!product||saveLock.current)return
+    if(expiry&&(!Number.isFinite(Number(quantity.replace(',','.')))||Number(quantity.replace(',','.'))<0)){setError('Μη έγκυρη ποσότητα.');return}
+    saveLock.current=true
     setSaving(true);setError('')
     try{
       const cents=price.trim()?parseCents(price):null
-      const draft:SmartCaptureDraft={id:crypto.randomUUID(),owner,store:membership.store_id,product:product.product_id,code:product.internal_code,unit:product.unit??'',priceCents:cents,observedAt:new Date().toISOString(),expiry:expiry||null,expiryKind:expiry?expiryKind:null,lot:lot.trim(),quantity:expiry?Math.max(0,Number(quantity)||1):null,locationId:null,expirySource:expiry?expirySource??'manual':null,created:Date.now(),image:evidence,attempts:0,error:'',retryAt:0,state:'pending',
+      const draft:SmartCaptureDraft={id:crypto.randomUUID(),owner,store:membership.store_id,product:product.product_id,code:product.internal_code,unit:product.unit??'',priceCents:cents,observedAt:new Date().toISOString(),expiry:expiry||null,expiryKind:expiry?expiryKind:null,lot:lot.trim(),quantity:expiry?Number(quantity.replace(',','.')):null,locationId:null,expirySource:expiry?expirySource??'manual':null,created:Date.now(),image:evidence,attempts:0,error:'',retryAt:0,state:'pending',
         metadata:{reviewed:true,reviewed_at:new Date().toISOString(),smart_scan:true,product_code:product.internal_code,scanned_identifier:scanned||null,gs1_hri:gs1?.hri??[],ocr_engine:'PaddleOCR.js 0.4.2 / el_PP-OCRv5_mobile_rec',ocr_elapsed_ms:ocrMs,decode_ms:decodeMs,raw_ocr:lastOcrText||null}}
       await queueSmartDraft(draft);await refreshDrafts();navigator.vibrate?.([40,25,40]);onSaved('Smart Scan αποθηκεύτηκε. Έτοιμο για το επόμενο προϊόν.');resetItem();void sync()
-    }catch(e){setError(e instanceof Error?e.message:'Η Smart Scan καταγραφή απέτυχε.')}finally{setSaving(false)}
+    }catch(e){setError(e instanceof Error?e.message:'Η Smart Scan καταγραφή απέτυχε.')}finally{saveLock.current=false;setSaving(false)}
   }
 
   return <section className="smart-scan">
@@ -189,6 +205,8 @@ export default function SmartScanPane({products,membership,owner,onSaved,onError
     <label className="capture-check"><input type="checkbox" checked={hardware} onChange={e=>setHardware(e.target.checked)}/>Scanner χειρός / Bluetooth keyboard</label>
     <p className="capture-status" role="status">{status}</p>{error&&<p className="capture-warning" role="alert">{error}</p>}
 
+    <label className="capture-field">Κωδικός ή barcode<input aria-label="Κωδικός ή barcode" value={manualCode} onChange={e=>{setManualCode(e.target.value);void consumeBarcode({text:e.target.value,format:'Manual'},true)}} /></label>
+    {product&&<div className="scan-result hit">{product.description}</div>}
     <div className="smart-fields">
       <div className={'smart-field '+(product?'done':'')}><span>1</span><div><small>ΠΡΟΪΟΝ</small><b>{product?.description??'Περιμένω barcode ή κωδικό OCR'}</b><em>{product?(product.internal_code+(scanned?' · '+scanned:'')):'Η κάμερα συνεχίζει μέχρι να κλειδώσει μοναδικό προϊόν.'}</em></div></div>
       <div className={'smart-field '+(price?'done':'')}><span>2</span><div><small>ΤΙΜΗ ΡΑΦΙΟΥ</small><label><input aria-label="Smart Scan τιμή" inputMode="decimal" placeholder="π.χ. 1,95" value={price} onChange={e=>{setPrice(e.target.value);revokeReview()}}/><i>€</i></label>{priceOptions.length>0&&<div className="smart-chips">{priceOptions.map(x=><button key={x} onClick={()=>{setPrice((x/100).toFixed(2));revokeReview()}}>{money(x)}</button>)}</div>}</div></div>

@@ -133,7 +133,7 @@ test('visual keyboard shrinks dialogs and never covers the save controls', async
 test('photo scroll is native until crop mode is explicitly selected', async ({ page }) => {
   await phone(page)
   await page.getByRole('button', { name: 'Νέα καταγραφή', exact: true }).click()
-  await page.getByRole('button', { name: 'Τιμή ραφιού', exact: true }).click()
+  await page.getByRole('button', { name: 'Μεμονωμένο OCR', exact: true }).click()
   const data = await page.evaluate(() => { const c = document.createElement('canvas'); c.width = 600; c.height = 1600; const ctx = c.getContext('2d')!; ctx.fillStyle = '#fff'; ctx.fillRect(0,0,600,1600); return c.toDataURL('image/png').split(',')[1] })
   await page.getByLabel('Φωτογραφία για OCR').setInputFiles({ name: 'scroll-fixture.png', mimeType: 'image/png', buffer: Buffer.from(data,'base64') })
   const preview = page.locator('.capture-preview')

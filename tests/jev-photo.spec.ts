@@ -16,3 +16,14 @@ test('one selected photograph is OCRed, sent to Jev and retained when provider i
  await expect(page.locator('.jev-job.waiting')).toContainText('Αναμονή ενεργοποίησης Jev')
  await expect(page.locator('.jev-job.committed')).toHaveCount(0)
 })
+
+test('owner provider configuration clears the key and never writes it to browser storage',async({page})=>{
+ let supplied=false
+ await page.route('**/functions/v1/lixi-jev',async r=>{const b=r.request().postDataJSON();if(b.action==='configure')supplied=true;await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({configured:true,can_configure:true,runs:[],captures:[]})})})
+ await page.getByText('Σύνδεση OpenRouter / Jev',{exact:true}).click()
+ await page.getByLabel('OpenRouter API key').fill('sk-or-test-placeholder-not-a-real-credential')
+ await page.getByRole('button',{name:'Σύνδεση Jev',exact:true}).click()
+ await expect.poll(()=>supplied).toBe(true)
+ await expect(page.getByLabel('OpenRouter API key')).toHaveValue('')
+ expect(await page.evaluate(()=>JSON.stringify(localStorage))).not.toContain('test-placeholder')
+})

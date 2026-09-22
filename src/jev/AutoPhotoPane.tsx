@@ -1,5 +1,6 @@
 import { useEffect,useRef,useState } from 'react'
 import { Camera,CameraSlash,Images,ArrowClockwise,CheckCircle,Clock,WarningCircle } from '@phosphor-icons/react'
+import { supabase } from '../lib/supabase'
 import type { Membership,ProductOverview } from '../lib/types'
 import { cameraErrorMessage } from '../capture/cameraErrors'
 import { enqueuePhoto,getJevStatus,listPhotos,photoEvents,processPhotos,retryPhoto,type PhotoJob } from './photos'
@@ -11,6 +12,7 @@ export default function AutoPhotoPane({membership,owner,onSaved,onError}:Props){
  const video=useRef<HTMLVideoElement>(null),stream=useRef<MediaStream|null>(null),generation=useRef(0),taking=useRef(false)
  const [camera,setCamera]=useState(false),[starting,setStarting]=useState(false),[capturing,setCapturing]=useState(false),[message,setMessage]=useState(''),[jobs,setJobs]=useState<PhotoJob[]>([]),[health,setHealth]=useState<any>(null)
  const [healthError,setHealthError]=useState(false)
+ const [providerKey,setProviderKey]=useState(''),[configuring,setConfiguring]=useState(false),[configMessage,setConfigMessage]=useState('')
  const onSavedRef=useRef(onSaved);onSavedRef.current=onSaved
  const store=membership.store_id
  async function refresh(){setJobs((await listPhotos(owner,store)).sort((a,b)=>b.created-a.created))}
@@ -25,6 +27,19 @@ export default function AutoPhotoPane({membership,owner,onSaved,onError}:Props){
   photoEvents.addEventListener('change',update);window.addEventListener('online',online);document.addEventListener('visibilitychange',hidden)
   return()=>{live=false;clearInterval(tick);clearInterval(healthTick);photoEvents.removeEventListener('change',update);window.removeEventListener('online',online);document.removeEventListener('visibilitychange',hidden);stopCamera()}
  },[owner,store])
+ async function configure(event:React.FormEvent){
+  event.preventDefault();if(configuring||!providerKey.trim())return
+  setConfiguring(true);setConfigMessage('')
+  try{
+   const {data,error}=await supabase.functions.invoke('lixi-jev',{body:{action:'configure',storeId:store,apiKey:providerKey.trim()}})
+   if(error||!data?.configured)throw new Error('Δεν έγινε σύνδεση. Έλεγξε ότι το κλειδί είναι ενεργό και έχει διαθέσιμο υπόλοιπο OpenRouter.')
+   setConfigMessage('Ο Jev συνδέθηκε. Οι φωτογραφίες σε αναμονή θα επανυποβληθούν.')
+   await status()
+   for(const job of await listPhotos(owner,store))if(['waiting','error'].includes(job.state))await retryPhoto(job.id,owner)
+   void drain()
+  }catch(e){setConfigMessage(e instanceof Error?e.message:'Η ρύθμιση δεν αποθηκεύτηκε.')}
+  finally{setProviderKey('');setConfiguring(false)}
+ }
  async function open(){
   if(starting||camera)return
   setStarting(true);setMessage('');const gen=++generation.current
@@ -56,6 +71,7 @@ export default function AutoPhotoPane({membership,owner,onSaved,onError}:Props){
  const review=jobs.filter(j=>j.state==='review').length
  return <section className="jev-capture" aria-label="Αυτόματη καταχώριση φωτογραφίας">
   <header className="jev-heading"><div><span className="jev-eyebrow">ΦΩΤΟΓΡΑΦΙΑ → ΚΑΤΑΧΩΡΙΣΗ</span><h2>Μία λήψη. Τα πεδία στη θέση τους.</h2><p>PP-OCRv5 + barcode διαβάζουν. Ο Jev αντιστοιχίζει. Η βάση καταχωρίζει όσα πέρασαν τους ελέγχους.</p></div><span className={'jev-provider '+(health?.configured?'online':'waiting')}>{healthError?'Μη διαθέσιμη κατάσταση':health?.configured?'Jev · συνδεδεμένος':'Jev · αναμονή ενεργοποίησης'}</span></header>
+  {membership.role==='owner'&&<details className="jev-configuration"><summary>Σύνδεση OpenRouter / Jev</summary><form onSubmit={configure}><label htmlFor="jev-api-key">OpenRouter API key</label><input id="jev-api-key" type="password" autoComplete="off" spellCheck={false} value={providerKey} placeholder="API key" onChange={e=>setProviderKey(e.target.value)} required/><button className="wk-button" disabled={configuring||!providerKey.trim()}>{configuring?'Έλεγχος σύνδεσης…':'Σύνδεση Jev'}</button><p>Μοντέλο: typesafe/jev-1.13. Το κλειδί αποθηκεύεται στον server, όχι στη συσκευή.</p>{configMessage&&<p role="status">{configMessage}</p>}</form></details>}
   <div className="jev-camera"><video ref={video} muted playsInline aria-label="Κάμερα αυτόματης καταγραφής"/><div className="jev-frame" aria-hidden="true"/>{!camera&&<div className="jev-camera-prompt"><Camera size={32}/><strong>Μία ετικέτα ή συσκευασία μέσα στο πλαίσιο</strong><span>Όσα δεν φαίνονται στην εικόνα δεν συμπληρώνονται αυθαίρετα.</span></div>}</div>
   <div className="jev-controls">{!camera?<button className="wk-button primary" onClick={()=>void open()} disabled={starting}><Camera size={20}/>{starting?'Άνοιγμα…':'Άνοιγμα κάμερας'}</button>:<><button className="wk-button primary jev-shutter" disabled={capturing} onClick={()=>void take()}><Camera size={21}/>{capturing?'Αποθήκευση λήψης…':'Φωτογράφισε και συνέχισε'}</button><button className="wk-button" onClick={stopCamera} aria-label="Κλείσιμο κάμερας"><CameraSlash size={20}/></button></>}
    <label className="wk-button"><Images size={20}/>Από φωτογραφίες<input className="sr-only" aria-label="Φωτογραφίες για αυτόματη καταχώριση" type="file" accept="image/*" multiple onChange={e=>{void files([...(e.target.files??[])]);e.target.value=''}}/></label>

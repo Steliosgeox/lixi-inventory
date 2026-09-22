@@ -12,3 +12,5 @@ public/capture/
 playwright-report/
 test-results/
 dependency-audit.json
+
+*.tsbuildinfo

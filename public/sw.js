@@ -1,5 +1,5 @@
 // Cache only this application's static shell. Never intercept account or database requests.
-const CACHE = 'leaksy-static-v6'
+const CACHE = 'leaksy-static-v7'
 const scope = new URL(self.registration.scope)
 const shell = [scope.href, new URL('manifest.webmanifest', scope).href]
 self.addEventListener('install', event => {

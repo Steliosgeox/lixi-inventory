@@ -1,12 +1,17 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4'
 import { GS1encoder } from 'npm:gs1encoder@1.4.1'
-import { buildBundle,callJev,validateInput,validGtin,MODEL,type CaptureInput,type Product,type StructuredBarcode } from './core.ts'
+import { buildBundle,callJev,validateInput,validGtin,MODEL,ENDPOINT,type CaptureInput,type Product,type StructuredBarcode } from './core.ts'
 const url=Deno.env.get('SUPABASE_URL')??''
 const secret=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')??''
 const db=()=>createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}})
 type DB=ReturnType<typeof db>
 const origins=new Set(['https://lixi-inventory.vercel.app'])
-const key=()=>Deno.env.get('OPENROUTER_API_KEY')?.trim()??''
+async function providerKey(client:DB,store:string):Promise<string>{
+ const preset=Deno.env.get('OPENROUTER_API_KEY')?.trim();if(preset)return preset
+ const {data,error}=await client.rpc('jev_provider_key',{p_store:store})
+ if(error)throw new Error('provider_configuration_unavailable')
+ return typeof data==='string'?data:''
+}
 const sha=async(b:ArrayBuffer)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',b))).map(n=>n.toString(16).padStart(2,'0')).join('')
 const shaText=(s:string)=>sha(new TextEncoder().encode(s).buffer)
 const canonical=(v:unknown):string=>Array.isArray(v)?'['+v.map(canonical).join(',')+']':v!==null&&typeof v==='object'?'{'+Object.entries(v).sort(([a],[b])=>a.localeCompare(b)).map(([k,x])=>JSON.stringify(k)+':'+canonical(x)).join(',')+'}':JSON.stringify(v)
@@ -44,7 +49,8 @@ async function processCapture(client:DB,user:string,input:CaptureInput){
  const {data:reservation,error}=await client.rpc('reserve_jev_capture',{p_id:input.id,p_store:input.storeId,p_user:user,p_hash:await shaText(canonical(input)),p_image_hash:input.imageHash,p_input:input})
  if(error)throw new Error('capture_reservation_failed')
  if(reservation.cached||reservation.duplicate||reservation.busy)return reservation
- if(!key()){
+ const key=await providerKey(client,input.storeId)
+ if(!key){
   await client.from('ai_capture_runs').update({state:'failed',error_code:'provider_not_configured',updated_at:new Date().toISOString()}).eq('id',input.id)
   return {state:'waiting',reason:'provider_not_configured'}
  }
@@ -56,7 +62,7 @@ async function processCapture(client:DB,user:string,input:CaptureInput){
   if(budgetError||!budget)throw new Error('budget_limit')
   const {data:row}=await client.from('ai_capture_runs').select('attempts').eq('id',input.id).single()
   await client.from('ai_capture_runs').update({attempts:(row?.attempts??0)+1}).eq('id',input.id)
-  const response=await callJev(buildBundle(input,items,structured),key())
+  const response=await callJev(buildBundle(input,items,structured),key)
   const {data:committed,error:saveError}=await client.rpc('finish_jev_capture',{p_id:input.id,p_user:user,p_model:response.model,p_decision:response.decision})
   if(saveError){
    const review={...response.decision,status:'review',reasons:['catalogue_or_evidence_changed']}
@@ -77,7 +83,8 @@ async function scheduled(client:DB,ticket:string){
  try{
   const {data:settings}=await client.from('jev_automation_settings').select('enabled').eq('store_id',job.store_id).single()
   if(!settings?.enabled)throw new Error('automation_disabled')
-  if(key()){
+  const key=await providerKey(client,job.store_id)
+  if(key){
    const {data:rows,error:readError}=await client.from('ai_capture_runs').select('input,user_id').eq('store_id',job.store_id).in('state',['failed','processing']).lt('attempts',3).lt('updated_at',new Date(Date.now()-60000).toISOString()).order('created_at').limit(8)
    if(readError)throw new Error('queue_unavailable')
    for(const r of rows??[]){try{const out=await processCapture(client,r.user_id,validateInput(r.input));if(out.state==='committed')committed++;else if(out.state==='review')review++;else waiting++}catch{waiting++}}
@@ -86,8 +93,8 @@ async function scheduled(client:DB,ticket:string){
   const {count:expiryAlerts}=await client.from('expiry_batches_overview').select('*',{count:'exact',head:true}).eq('store_id',job.store_id).in('expiry_status',['expired','critical','warning'])
   const {count:unmatched}=await client.from('products').select('*',{count:'exact',head:true}).eq('store_id',job.store_id).is('barcode',null)
   const {count:backlog}=await client.from('ai_capture_runs').select('*',{count:'exact',head:true}).eq('store_id',job.store_id).in('state',['processing','failed'])
-  const summary={committed,review,waiting,backlog:backlog??0,expiry_alerts:expiryAlerts??0,missing_barcodes:unmatched??0,provider_configured:!!key(),timezone:'Europe/Athens',model:MODEL}
-  const {error:finishError}=await client.from('jev_sync_runs').update({state:key()?'completed':'blocked',summary,finished_at:new Date().toISOString()}).eq('id',job.id)
+  const summary={committed,review,waiting,backlog:backlog??0,expiry_alerts:expiryAlerts??0,missing_barcodes:unmatched??0,provider_configured:!!key,timezone:'Europe/Athens',model:MODEL}
+  const {error:finishError}=await client.from('jev_sync_runs').update({state:key?'completed':'blocked',summary,finished_at:new Date().toISOString()}).eq('id',job.id)
   if(finishError)throw new Error('job_receipt_failed')
   return {job_id:job.id,...summary}
  }catch{
@@ -114,13 +121,30 @@ export async function handleRequest(req:Request):Promise<Response>{
   const raw=await req.text();if(raw.length>65536)return json({error:'request_too_large'},413)
   const body=JSON.parse(raw)
   if(body.action==='status'){
-   await requireMember(client,auth.user.id,body.storeId)
+   const role=await requireMember(client,auth.user.id,body.storeId)
+   const key=await providerKey(client,body.storeId)
    const [last,recent,config]=await Promise.all([
     client.from('jev_sync_runs').select('id,slot,state,summary,finished_at').eq('store_id',body.storeId).order('slot',{ascending:false}).limit(7),
     client.from('ai_capture_runs').select('id,state,decision,result,error_code,created_at').eq('store_id',body.storeId).order('created_at',{ascending:false}).limit(30),
     client.from('jev_automation_settings').select('enabled').eq('store_id',body.storeId).single()
    ])
-   return json({provider:'openrouter',model:MODEL,configured:!!key(),automatic_enabled:config.data?.enabled??false,schedule:{timezone:'Europe/Athens',times:['07:00','07:20','07:40','08:00','08:20','08:40','09:00']},runs:last.data??[],captures:recent.data??[]})
+   return json({provider:'openrouter',model:MODEL,configured:!!key,can_configure:role==='owner',automatic_enabled:config.data?.enabled??false,schedule:{timezone:'Europe/Athens',times:['07:00','07:20','07:40','08:00','08:20','08:40','09:00']},runs:last.data??[],captures:recent.data??[]})
+  }
+  if(body.action==='configure'){
+   const role=await requireMember(client,auth.user.id,body.storeId,true)
+   if(role!=='owner')return json({error:'owner_required'},403)
+   if(typeof body.apiKey!=='string'||!/^sk-or-[A-Za-z0-9_-]{20,190}$/.test(body.apiKey.trim()))return json({error:'invalid_key_format'},400)
+   const credential=body.apiKey.trim()
+   // Probe the documented Decisions endpoint before storing a credential. Never log request bodies.
+   const {data:budget,error:budgetError}=await client.rpc('jev_take_budget',{p_store:body.storeId})
+   if(budgetError||!budget)return json({error:'budget_limit'},429)
+   const probe=await fetch(ENDPOINT,{method:'POST',redirect:'error',signal:AbortSignal.timeout(8000),headers:{Authorization:'Bearer '+credential,'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,state:'Leaksy provider connection test.',questions:{connected:{type:'noul',instructions:'Is this a provider connection test?'}}})})
+   if(!probe.ok)return json({error:'provider_http_'+probe.status},400)
+   const result=await probe.json()
+   if(typeof result.answers?.connected?.noul!=='number')return json({error:'invalid_provider_response'},400)
+   const {error:saveError}=await client.rpc('configure_jev_provider',{p_store:body.storeId,p_user:auth.user.id,p_key:credential})
+   if(saveError)return json({error:'configuration_not_saved'},500)
+   return json({configured:true,model:result.model??MODEL})
   }
   if(body.action!=='capture')return json({error:'unsupported_action'},400)
   return json(await processCapture(client,auth.user.id,validateInput(body.capture)))

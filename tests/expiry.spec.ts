@@ -5,7 +5,8 @@ import { seed } from './seed'
 test.beforeEach(async({page})=>{await seed(page)})
 
 test('expiry monitor shows physical batches and priority buckets',async({page})=>{
-  await page.locator('.wk-nav').getByRole('button',{name:/Λήξεις/}).click()
+  if(await page.locator('.wk-mobile-nav').isVisible())await page.locator('.wk-mobile-nav').getByRole('button',{name:'Λήξεις',exact:true}).click()
+  else await page.locator('.wk-nav').getByRole('button',{name:/Λήξεις/}).click()
   await expect(page.getByRole('heading',{name:'Λήξεις',exact:true})).toBeVisible()
   await expect(page.getByText('ΛΗΓΜΕΝΑ',{exact:true})).toBeVisible()
   await expect(page.getByText('ΕΠΟΜΕΝΕΣ 7 ΗΜ.',{exact:true})).toBeVisible()

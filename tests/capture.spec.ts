@@ -5,6 +5,7 @@ import { seed } from './seed'
 test.beforeEach(async({page})=>{
   await seed(page)
   await page.getByRole('button',{name:'Νέα καταγραφή',exact:true}).click()
+  await page.getByRole('button',{name:'Smart Scan',exact:true}).click()
   await expect(page.getByText('SMART SCAN',{exact:true})).toBeVisible()
 })
 

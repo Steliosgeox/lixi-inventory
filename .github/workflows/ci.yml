@@ -24,6 +24,11 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Dependency security gate
         run: npm audit --audit-level=high --json > dependency-audit.json
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Validate server entrypoint
+        run: deno check --node-modules-dir=manual --no-lock supabase/functions/lixi-jev/index.ts
       - name: Unit tests
         run: npm run test:unit
       - name: Production build

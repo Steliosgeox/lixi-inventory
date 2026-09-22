@@ -5,7 +5,7 @@ test('consecutive photos reuse one OCR worker and do not write unreviewed prices
   test.setTimeout(180000)
   await seed(page)
   await page.getByRole('button', { name: 'Νέα καταγραφή', exact: true }).click()
-  await page.getByRole('button', { name: 'Τιμή ραφιού', exact: true }).click()
+  await page.getByRole('button', { name: 'Μεμονωμένο OCR', exact: true }).click()
   let createdWorkers = 0
   let destroyedWorkers = 0
   page.on('worker', worker => {
@@ -43,8 +43,8 @@ test('consecutive photos reuse one OCR worker and do not write unreviewed prices
     expect(destroyedWorkers).toBe(0)
   }
   // Switching to barcode and back is a common shop workflow, not a reason to reload models.
-  await page.getByRole('button', { name: 'Barcode / scanner', exact: true }).click()
-  await page.getByRole('button', { name: 'Τιμή ραφιού', exact: true }).click()
+  await page.getByRole('button', { name: 'Smart Scan', exact: true }).click()
+  await page.getByRole('button', { name: 'Μεμονωμένο OCR', exact: true }).click()
   expect(createdWorkers).toBe(1)
   expect(destroyedWorkers).toBe(0)
   expect(writes).toBe(0)
