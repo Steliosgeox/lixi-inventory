@@ -117,7 +117,8 @@ test('visual keyboard shrinks dialogs and never covers the save controls', async
   const box = (await save.boundingBox())!
   expect(box.y + box.height).toBeLessThanOrEqual(390)
   expect(box.y).toBeGreaterThan(59)
-  const textarea = page.getByLabel('Περιγραφή', { exact: true })
+  const textarea = page.locator('.wk-drawer textarea').first()
+  await expect(textarea).toBeVisible()
   expect(await textarea.evaluate(el => getComputedStyle(el).fontSize)).toBe('16px')
   await page.screenshot({ path: `test-results/${info.project.name}-iphone-keyboard-layout.png` })
   // Zoom must never masquerade as a keyboard or disable magnification.
