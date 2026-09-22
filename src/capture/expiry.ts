@@ -11,9 +11,9 @@ export type ExpiryCandidate = {
 }
 
 const fold=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim()
-const EXPIRY=/\b(?:ΛΗΞ(?:Η|ΕΙ|ΕΩΣ)?|ΗΜΕΡΟΜΗΝΙΑ ΛΗΞΗΣ|ΑΝΑΛΩΣΗ ΕΩΣ|USE\s*BY|EXP(?:IRY|IRATION)?|EXPIRES?)\b/u
-const BEST=/\b(?:ΑΝΑΛΩΣΗ ΚΑΤΑ ΠΡΟΤΙΜΗΣΗ(?: ΠΡΙΝ(?: ΑΠΟ)?)?|BEST\s*BEFORE|BBE|BEST\s*BY)\b/u
-const SELL=/\b(?:SELL\s*BY|ΠΩΛΗΣΗ ΕΩΣ)\b/u
+const EXPIRY=/(?:ΛΗΞ(?:Η|ΕΙ|ΕΩΣ)?|ΗΜΕΡΟΜΗΝΙΑ ΛΗΞΗΣ|ΑΝΑΛΩΣΗ ΕΩΣ|\bUSE\s*BY\b|\bEXP(?:IRY|IRATION)?\b|\bEXPIRES?\b)/u
+const BEST=/(?:ΑΝΑΛΩΣΗ ΚΑΤΑ ΠΡΟΤΙΜΗΣΗ(?: ΠΡΙΝ(?: ΑΠΟ)?)?|\bBEST\s*BEFORE\b|\bBBE\b|\bBEST\s*BY\b)/u
+const SELL=/(?:\bSELL\s*BY\b|ΠΩΛΗΣΗ ΕΩΣ)/u
 
 function kindFor(text:string):ExpiryKind {
   const x=fold(text)
