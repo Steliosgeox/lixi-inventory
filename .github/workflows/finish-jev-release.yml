@@ -41,6 +41,23 @@ jobs:
                   text=text[:start]+fragment+text[end:]
               assert hashlib.sha256(text.encode()).hexdigest()==item['result'], 'Result mismatch: '+str(p)
               p.write_text(text)
+          p=Path('src/jev/photos.ts');text=p.read_text()
+          fixes=[
+              ("import Dexie,{type Table} from 'dexie'", "import Dexie,{type Table} from 'dexie'\nimport { encodePhoto,restorePhoto,type StoredPhoto } from './photoStorage'"),
+              ('export type PhotoJob={','export type PhotoJob=StoredPhoto&{'),
+              ('blob:Blob|null;input:','input:'),
+              ("state:'queued',blob,input:null","state:'queued',...await encodePhoto(blob),input:null"),
+              ('if(!job.blob)throw','const source=restorePhoto(job);if(!source)throw'),
+              ('prepareImage(job.blob)','prepareImage(source)'),
+              ("{blob:image.blob,input,state:'sending'","{...await encodePhoto(image.blob),input,state:'sending'"),
+              ('if(!current?.blob)throw','const evidence=current?restorePhoto(current):null;if(!evidence)throw'),
+              ('upload(input.evidencePath,current.blob,','upload(input.evidencePath,evidence,'),
+              ('result:data,blob:null,message:','result:data,blob:null,bytes:null,message:')
+          ]
+          for old,new in fixes:
+              assert text.count(old)==1, 'Storage patch drift: '+old
+              text=text.replace(old,new)
+          p.write_text(text)
           Path('supabase/functions/lixi-jev/index.ts').write_text("import { handleRequest } from './server.ts'\nDeno.serve(handleRequest)\n")
           for name in ['scripts/wire-jev.mjs','.github/workflows/jev-toolchain.yml','.github/workflows/jev-release-prepare.yml','.github/workflows/release-source.yml','.github/workflows/smartscan-check.yml']:
               Path(name).unlink(missing_ok=True)
