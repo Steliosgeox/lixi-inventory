@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { SquaresFour, Package, Barcode, MapPin, SlidersHorizontal, MagnifyingGlass, ArrowUpRight, ArrowRight, ArrowClockwise, CaretRight, CaretLeft, CaretDown, DownloadSimple, Printer, Check, X, Plus, Clock, List, ListChecks, WarningCircle, Sun, Moon, Command, Scan, FileText, Tray, ChartBar, SignOut, ArrowUp, ArrowDown, CircleNotch } from '@phosphor-icons/react'
+import { SquaresFour, Package, Barcode, MapPin, SlidersHorizontal, MagnifyingGlass, ArrowUpRight, ArrowRight, ArrowClockwise, CaretRight, CaretLeft, CaretDown, DownloadSimple, Printer, Check, X, Plus, Clock, Calendar, List, ListChecks, WarningCircle, Sun, Moon, Command, Scan, FileText, Tray, ChartBar, SignOut, ArrowUp, ArrowDown, CircleNotch } from '@phosphor-icons/react'
 import { useLegacyTable, getCoreRowModel, getSortedRowModel, getPaginationRowModel, type LegacyColumnDef } from '@tanstack/react-table/legacy'
 import { flexRender, type SortingState, type RowSelectionState } from '@tanstack/react-table'
-import type { ProductOverview, Location, Membership } from '../lib/types'
+import type { ProductOverview, Location, Membership, ExpiryBatchOverview } from '../lib/types'
 import { money, signed, normalize, searchProducts, matches, labels, exportProducts, dateLabel, type Filter } from './data'
 import { supabase } from '../lib/supabase'
 
-export type Page = 'dashboard' | 'products' | 'audit' | 'locations' | 'activity' | 'scan' | 'settings'
+export type Page = 'dashboard' | 'products' | 'audit' | 'expiry' | 'locations' | 'activity' | 'scan' | 'settings'
 const navigation = [
   { id: 'dashboard', title: 'Επισκόπηση', icon: SquaresFour },
   { id: 'products', title: 'Κατάλογος', icon: Package },
   { id: 'audit', title: 'Έλεγχος τιμών', icon: ChartBar },
+  { id: 'expiry', title: 'Λήξεις', icon: Calendar },
   { id: 'locations', title: 'Θέσεις & ράφια', icon: MapPin },
   { id: 'activity', title: 'Καταγραφές', icon: Clock },
   { id: 'scan', title: 'Κέντρο σάρωσης', icon: Scan },
@@ -41,6 +42,7 @@ export default function Workspace({ products, locations, membership, email, load
   }, [])
   const checked = products.filter(p => p.shelf_price != null).length
   const differences = products.filter(p => p.price_status === 'different')
+  const expiryAttention = products.filter(p => ['expired','critical','warning'].includes(p.expiry_status ?? 'untracked'))
   const current = navigation.find(n => n.id === page)!
   const jump = (p: Page, f: Filter = 'all', loc = 'all') => { setPage(p); setFilter(f); setLocationFilter(loc); setQuery(''); setMenuOpen(false); window.scrollTo({ top: 0, behavior: 'instant' }) }
   const find = (p: ProductOverview) => { setCommandOpen(false); onEdit(p) }
@@ -51,27 +53,28 @@ export default function Workspace({ products, locations, membership, email, load
       <a className="wk-brand" href="#" onClick={e => { e.preventDefault(); jump('dashboard') }} aria-label="Leaksy αρχική"><span className="wk-logo"><Package size={25} weight="duotone" /></span><span>leaksy<span className="wk-brand-sub">INVENTORY WORKSPACE</span></span></a>
       <div className="wk-store"><span className="wk-store-icon"><SquaresFour weight="duotone" size={20} /></span><span><b>Το κατάστημά μου</b><small>Κεντρική απογραφή</small></span><span className="wk-live-dot" /></div>
       <div className="wk-nav-label">Χώρος εργασίας</div>
-      <nav aria-label="Κύρια πλοήγηση" className="wk-nav">{navigation.map((n, i) => <button key={n.id} onClick={() => jump(n.id, n.id === 'audit' ? 'different' : 'all')} className={page === n.id ? 'is-active' : ''} aria-current={page === n.id ? 'page' : undefined}><n.icon size={20} weight={page === n.id ? 'duotone' : 'regular'} /><span>{n.title}</span>{n.id === 'audit' && differences.length > 0 && <b className="wk-nav-count">{differences.length}</b>}</button>)}</nav>
+      <nav aria-label="Κύρια πλοήγηση" className="wk-nav">{navigation.map((n, i) => <button key={n.id} onClick={() => jump(n.id, n.id === 'audit' ? 'different' : 'all')} className={page === n.id ? 'is-active' : ''} aria-current={page === n.id ? 'page' : undefined}><n.icon size={20} weight={page === n.id ? 'duotone' : 'regular'} /><span>{n.title}</span>{n.id === 'audit' && differences.length > 0 && <b className="wk-nav-count">{differences.length}</b>}{n.id === 'expiry' && expiryAttention.length > 0 && <b className="wk-nav-count">{expiryAttention.length}</b>}</button>)}</nav>
       <div className="wk-side-tip"><Barcode size={24} /><b>Λιγότερη πληκτρολόγηση.</b><p>Βρες το είδος με την κάμερα και κατέγραψε την τιμή του.</p><button onClick={() => jump('scan')}>Άνοιγμα σαρωτή <ArrowUpRight size={16} /></button></div>
       <div className="wk-account"><span className="wk-avatar">{(email || 'L').slice(0,2).toUpperCase()}</span><div><b>{email?.split('@')[0] || 'Λογαριασμός'}</b><small>{membership.role === 'owner' ? 'Ιδιοκτήτης' : membership.role}</small></div><button className="wk-icon" aria-label="Ρυθμίσεις λογαριασμού" onClick={() => jump('settings')}><SlidersHorizontal size={18} /></button></div>
     </aside>
     <div className="wk-main">
       <header className="wk-top"><div className="wk-top-leading"><button className="wk-icon wk-menu-trigger" aria-label="Όλες οι ενότητες" aria-haspopup="dialog" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><List size={21} /></button><div className="wk-breadcrumb"><span>Χώρος εργασίας</span><CaretRight size={13} /><strong>{current.title}</strong></div></div><div className="wk-top-actions"><button className="wk-command" aria-label="Αναζήτηση προϊόντος" onClick={() => setCommandOpen(true)}><MagnifyingGlass size={17} /><span>Αναζήτηση προϊόντος</span><kbd>⌘ K</kbd></button><button className="wk-icon" aria-label={theme === 'light' ? 'Σκούρο θέμα' : 'Φωτεινό θέμα'} onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={19} /> : <Sun size={19} />}</button><button className="wk-icon" aria-label="Ανανέωση δεδομένων" disabled={loading} onClick={onRefresh}><ArrowClockwise size={19} className={loading ? 'wk-spin' : ''} /></button></div></header>
       <main id="workspace-content" className="wk-content" tabIndex={-1}>
-        <div className="wk-page-title"><div><div className="wk-overline">{page === 'dashboard' ? now : 'LEAKSY / ' + current.title}</div><h1>{page === 'dashboard' ? 'Έλεγχος καταλόγου' : current.title}</h1><p>{page === 'dashboard' ? `${differences.length} διαφορές τιμών · ${products.length - checked} προϊόντα χωρίς τιμή ραφιού.` : page === 'products' ? 'Κωδικοί, τιμές και θέσεις. Όλα σε ένα σημείο.' : page === 'audit' ? 'Σύγκρινε τον κατάλογο με τις καταγεγραμμένες τιμές ραφιού.' : page === 'locations' ? 'Πραγματικές θέσεις από τον κατάλογο. Όχι εκτιμήσεις.' : page === 'activity' ? 'Οι τελευταίες διαθέσιμες παρατηρήσεις ανά προϊόν.' : page === 'scan' ? 'Διάλεξε τι σαρώνεις. Επιβεβαίωσε πριν αποθηκεύσεις.' : 'Η πρόσβαση και οι προτιμήσεις του χώρου σου.'}</p></div><div className="wk-title-actions">{page !== 'scan' && <button className="wk-button primary" onClick={() => jump('scan')}><Plus size={17} />Νέα καταγραφή</button>}</div></div>
+        <div className="wk-page-title"><div><div className="wk-overline">{page === 'dashboard' ? now : 'LEAKSY / ' + current.title}</div><h1>{page === 'dashboard' ? 'Έλεγχος καταλόγου' : current.title}</h1><p>{page === 'dashboard' ? `${differences.length} διαφορές τιμών · ${products.length - checked} προϊόντα χωρίς τιμή ραφιού.` : page === 'products' ? 'Κωδικοί, τιμές και θέσεις. Όλα σε ένα σημείο.' : page === 'audit' ? 'Σύγκρινε τον κατάλογο με τις καταγεγραμμένες τιμές ραφιού.' : page === 'locations' ? 'Πραγματικές θέσεις από τον κατάλογο. Όχι εκτιμήσεις.' : page === 'activity' ? 'Οι τελευταίες διαθέσιμες παρατηρήσεις ανά προϊόν.' : page === 'expiry' ? 'Παρτίδες που έχουν λήξει ή πλησιάζουν τη λήξη, με προτεραιότητα και monitoring.' : page === 'scan' ? 'Smart Scan: προϊόν, τιμή, λήξη και lot στην ίδια συνεχή διαδικασία.' : 'Η πρόσβαση και οι προτιμήσεις του χώρου σου.'}</p></div><div className="wk-title-actions">{page !== 'scan' && <button className="wk-button primary" onClick={() => jump('scan')}><Plus size={17} />Νέα καταγραφή</button>}</div></div>
         {!online && <div role="status" className="wk-notice"><WarningCircle size={18} />Εκτός σύνδεσης. Η προβολή μπορεί να είναι παλιά· οι αλλαγές χρειάζονται σύνδεση.</div>}
         {loading && !products.length ? <div className="wk-skeleton" role="status" aria-label="Φόρτωση καταλόγου"><i /><i /><i /><i /></div> : <>
           {page === 'dashboard' && <Overview products={products} onEdit={onEdit} jump={jump} />}
           {(page === 'products' || page === 'audit') && <Catalogue key={page} products={products} filter={filter} setFilter={setFilter} query={query} setQuery={setQuery} locationFilter={locationFilter} setLocationFilter={setLocationFilter} onEdit={onEdit} />}
           {page === 'locations' && <div className="wk-locations"><section className="wk-card wk-unmapped"><span className="wk-square amber"><MapPin size={26} /></span><h2>{products.filter(p => !p.location_code).length} προϊόντα χωρίς θέση</h2><p>Άνοιξε ένα προϊόν για να ορίσεις θέση, σειρά και αριθμό. Οι θέσεις δεν συμπληρώνονται αυτόματα από ονόματα προϊόντων.</p><button className="wk-button" onClick={() => jump('products', 'unlocated')}>Χαρτογράφηση προϊόντων <ArrowRight size={17} /></button></section>{locations.map(l => <button key={l.id} className="wk-card wk-location-card" onClick={() => jump('products', 'all', l.code)}><div className="wk-location-label">{l.code}</div><h2>{l.name}</h2><span>{products.filter(p => p.location_code === l.code).length} καταχωρισμένα προϊόντα</span><span className="wk-location-open">Προβολή θέσης <ArrowUpRight size={19} /></span></button>)}</div>}
           {page === 'activity' && <Activity products={products} onEdit={onEdit} full />}
+          {page === 'expiry' && <ExpiryPage products={products} membership={membership} onEdit={onEdit} jump={jump} />}
           {page === 'scan' && <div className="wk-legacy">{scan}</div>}
           {page === 'settings' && <div className="wk-legacy"><section className="wk-card wk-theme-setting"><div><h2>Εμφάνιση</h2><p>Η επιλογή θέματος αποθηκεύεται σε αυτή τη συσκευή.</p></div><button className="wk-button" onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}{theme === 'light' ? 'Σκούρο θέμα' : 'Φωτεινό θέμα'}</button></section>{settings}</div>}
         </>}
         <footer className="wk-footer"><span><span className={`wk-live-dot ${!online || !lastSynced ? 'offline' : ''}`} />{lastSynced ? `Τελευταία λήψη ${lastSynced.toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' })}` : 'Αναμονή δεδομένων'}</span><span>{products.length} προϊόντα · {checked} με τιμή ραφιού <span className="wk-footer-version">WORKSPACE 0.3</span></span></footer>
       </main>
     </div>
-    <nav className="wk-mobile-nav" aria-label="Πλοήγηση κινητού">{navigation.filter(n => ['dashboard','products','audit','scan','settings'].includes(n.id)).map(n => <button key={n.id} aria-current={page === n.id ? 'page' : undefined} className={page === n.id ? 'is-active' : ''} onClick={() => jump(n.id, n.id === 'audit' ? 'different' : 'all')}><n.icon size={21} weight={page === n.id ? 'fill' : 'regular'} /><span>{n.id === 'dashboard' ? 'Αρχική' : n.id === 'scan' ? 'Σάρωση' : n.id === 'audit' ? 'Τιμές' : n.title}</span></button>)}</nav>
+    <nav className="wk-mobile-nav" aria-label="Πλοήγηση κινητού">{navigation.filter(n => ['dashboard','products','expiry','scan','settings'].includes(n.id)).map(n => <button key={n.id} aria-current={page === n.id ? 'page' : undefined} className={page === n.id ? 'is-active' : ''} onClick={() => jump(n.id, n.id === 'audit' ? 'different' : 'all')}><n.icon size={21} weight={page === n.id ? 'fill' : 'regular'} /><span>{n.id === 'dashboard' ? 'Αρχική' : n.id === 'scan' ? 'Σάρωση' : n.id === 'expiry' ? 'Λήξεις' : n.title}</span></button>)}</nav>
     <Dialog.Root open={menuOpen} onOpenChange={setMenuOpen}><Dialog.Portal>
       <Dialog.Overlay className="wk-overlay" />
       <Dialog.Content className="wk-mobile-menu">
@@ -108,6 +111,49 @@ function Overview({ products, onEdit, jump }: { products: ProductOverview[]; onE
     <section className="wk-bottom-banner"><span className="wk-banner-icon"><Scan size={29} weight="duotone" /></span><div><h2>Από το ράφι, κατευθείαν στον κατάλογο.</h2><p>Σάρωσε barcode ή διάβασε μια ετικέτα. Επιβεβαίωσε την τιμή πριν αποθηκευτεί.</p></div><button className="wk-button primary" onClick={() => jump('scan')}>Κέντρο σάρωσης <ArrowRight size={17} /></button></section>
   </div>
 }
+
+function ExpiryPage({products,membership,onEdit,jump}:{products:ProductOverview[];membership:Membership;onEdit:(p:ProductOverview)=>void;jump:(p:Page,f?:Filter)=>void}){
+  type EF='all'|'expired'|'critical'|'warning'|'monitor'|'ok'
+  const [filter,setFilter]=useState<EF>('all')
+  const [batches,setBatches]=useState<ExpiryBatchOverview[]>([])
+  const [loading,setLoading]=useState(true),[error,setError]=useState('')
+  useEffect(()=>{
+    let live=true;setLoading(true);setError('')
+    supabase.from('expiry_batches_overview').select('*').eq('store_id',membership.store_id).order('expiry_date',{ascending:true}).limit(1000).then(({data,error})=>{
+      if(!live)return
+      setBatches((data??[]) as ExpiryBatchOverview[]);setError(error?'Δεν ήταν δυνατή η λήψη παρτίδων λήξης.':'');setLoading(false)
+    })
+    return()=>{live=false}
+  },[membership.store_id])
+  const visible=filter==='all'?batches:batches.filter(b=>b.expiry_status===filter)
+  const untracked=products.filter(p=>(p.expiry_status??'untracked')==='untracked').length
+  const count=(s:EF)=>s==='all'?batches.length:batches.filter(b=>b.expiry_status===s).length
+  const label=(s:string)=>s==='expired'?'Ληγμένο':s==='critical'?'≤ 7 ημέρες':s==='warning'?'≤ 30 ημέρες':s==='monitor'?'≤ 90 ημέρες':'ΟΚ'
+  const productById=new Map(products.map(p=>[p.product_id,p]))
+  return <div className="wk-expiry-page">
+    <div className="wk-expiry-kpis">
+      <button className="wk-expiry-kpi expired" onClick={()=>setFilter('expired')}><small>ΛΗΓΜΕΝΑ</small><strong>{count('expired')}</strong><span>άμεση ενέργεια</span></button>
+      <button className="wk-expiry-kpi critical" onClick={()=>setFilter('critical')}><small>ΕΠΟΜΕΝΕΣ 7 ΗΜ.</small><strong>{count('critical')}</strong><span>υψηλή προτεραιότητα</span></button>
+      <button className="wk-expiry-kpi warning" onClick={()=>setFilter('warning')}><small>ΕΠΟΜΕΝΕΣ 30 ΗΜ.</small><strong>{count('warning')}</strong><span>προγραμματισμός</span></button>
+      <button className="wk-expiry-kpi untracked" onClick={()=>jump('scan')}><small>ΧΩΡΙΣ ΛΗΞΗ</small><strong>{untracked}</strong><span>χρειάζονται Smart Scan</span></button>
+    </div>
+    <section className="wk-card wk-expiry-list">
+      <div className="wk-card-head"><div><span className="wk-section-kicker">EXPIRY MONITOR</span><h2>Παρτίδες και λήξεις</h2><p>Κάθε διαφορετική ημερομηνία/lot παραμένει ξεχωριστή παρτίδα.</p></div><button className="wk-button primary" onClick={()=>jump('scan')}><Scan size={17}/>Smart Scan</button></div>
+      <div className="wk-expiry-tabs">{(['all','expired','critical','warning','monitor','ok'] as EF[]).map(s=><button key={s} className={filter===s?'is-active':''} onClick={()=>setFilter(s)}>{s==='all'?'Όλες':label(s)} <b>{count(s)}</b></button>)}</div>
+      {loading?<div className="wk-empty"><CircleNotch className="wk-spin" size={24}/>Φόρτωση λήξεων…</div>:error?<div className="wk-empty" role="alert"><WarningCircle size={25}/>{error}</div>:visible.length?<div className="wk-expiry-rows">{visible.map(b=>{
+        const p=productById.get(b.product_id)
+        return <button key={b.batch_id} className={'wk-expiry-row '+b.expiry_status} onClick={()=>p&&onEdit(p)}>
+          <span className="wk-expiry-date"><b>{new Intl.DateTimeFormat('el-GR',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'UTC'}).format(new Date(b.expiry_date+'T00:00:00Z'))}</b><small>{b.days_until_expiry<0?Math.abs(b.days_until_expiry)+' ημέρες πριν':b.days_until_expiry===0?'Σήμερα':b.days_until_expiry+' ημέρες'}</small></span>
+          <span className="wk-product-cell"><span className="wk-product-symbol"><Package size={19}/></span><span><strong>{b.description}</strong><small><code>{b.internal_code}</code>{b.lot_number?' · LOT '+b.lot_number:''}</small></span></span>
+          <span className={'wk-expiry-pill '+b.expiry_status}>{label(b.expiry_status)}</span>
+          <span className="wk-expiry-meta">{b.quantity!=null?<b>{b.quantity} {b.unit??''}</b>:<b>—</b>}<small>{b.location_code?'Θέση '+b.location_code:'Χωρίς θέση'} · {b.source_type.toUpperCase()}</small></span>
+        </button>
+      })}</div>:<div className="wk-empty"><Calendar size={30}/><h2>Δεν υπάρχουν παρτίδες σε αυτή την κατηγορία.</h2><p>Το Smart Scan μπορεί να προσθέσει λήξη και lot χωρίς ξεχωριστή φόρμα.</p><button className="wk-button primary" onClick={()=>jump('scan')}>Άνοιγμα Smart Scan</button></div>}
+      <div className="wk-card-foot"><WarningCircle size={15}/>Alerts: ληγμένα, 7, 30 και 90 ημέρες. Το OCR απαιτεί ανθρώπινη επιβεβαίωση πριν αποθηκευτεί.</div>
+    </section>
+  </div>
+}
+
 export function Delta({ product: p }: { product: ProductOverview }) { return <span className={`wk-delta ${p.price_diff == null ? 'none' : p.price_diff > 0 ? 'up' : p.price_diff < 0 ? 'down' : 'equal'}`}>{p.price_diff != null && p.price_diff !== 0 && (p.price_diff > 0 ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}{signed(p.price_diff)}</span> }
 function Activity({ products, onEdit, full = false }: { products: ProductOverview[]; onEdit: (p: ProductOverview) => void; full?: boolean }) {
   const recent = products.filter(p => p.observed_at).sort((a,b) => (b.observed_at ?? '').localeCompare(a.observed_at ?? '')).slice(0, full ? 40 : 4)
