@@ -32,7 +32,7 @@ async function seed(page: Page) {
     await route.fulfill({ status: 200, headers, body: JSON.stringify(body) })
   })
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Η απογραφή, σε τάξη.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Έλεγχος καταλόγου' })).toBeVisible()
 }
 async function catalog(page: Page) { await page.locator('nav button:visible').filter({ hasText: 'Κατάλογος' }).first().click() }
 
@@ -66,7 +66,8 @@ test('filters, sorting, paging and CSV selection', async ({ page }) => {
   const d = await download; const path = await d.path()
   expect(fs.readFileSync(path!, 'utf8')).toContain('"0000001"')
   expect(fs.readFileSync(path!, 'utf8').split('\r\n')).toHaveLength(2)
-  await page.locator('th').filter({ hasText: 'Κατάλογος' }).getByRole('button').click()
+  if (await page.getByLabel('Ταξινόμηση προϊόντων').isVisible()) await page.getByLabel('Ταξινόμηση προϊόντων').selectOption('catalog_price:asc')
+  else await page.locator('th').filter({ hasText: 'Κατάλογος' }).getByRole('button').click()
   await expect(page.locator('.wk-table tbody tr').first()).toContainText('0000001')
 })
 test('drawer opens history, traps focus and submits atomic edit', async ({ page }) => {
