@@ -18,7 +18,7 @@ jobs:
       - run: npx playwright install --with-deps webkit
       - name: Check live production in iPhone 13 WebKit emulation
         run: |
-          cat > /tmp/live-iphone.mjs <<'NODE'
+          cat > live-iphone.mjs <<'NODE'
           import { webkit, devices } from '@playwright/test'
           import fs from 'node:fs'
           const store='00000000-0000-4000-8000-000000000001'
@@ -69,7 +69,7 @@ jobs:
           fs.writeFileSync('iphone-live-results.json',JSON.stringify({url:page.url(),viewport:page.viewportSize(),topSafeArea:true,catalogueNoOverflow:true,saveVisible:true},null,2))
           await browser.close()
           NODE
-          node /tmp/live-iphone.mjs
+          node live-iphone.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: iphone-live-production
