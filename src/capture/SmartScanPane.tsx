@@ -51,7 +51,7 @@ export default function SmartScanPane({products,membership,owner,onSaved,onError
     void import('onscan.js').then(({default:onScan})=>{
       if(cancelled)return
       onScan.attachTo(document,{suffixKeyCodes:[13],minLength:7,avgTimeByChar:45,timeBeforeScanTest:120,ignoreIfFocusOn:'input,textarea,select,[contenteditable="true"]',reactToPaste:false,preventDefault:false,stopPropagation:false,
-        onScan:(raw:string)=>{if(!cancelled)void consumeBarcode({text:raw,format:'Hardware'})}})
+        onScan:(raw:string)=>{if(!cancelled)void consumeBarcode({text:raw,format:'Hardware'},true)}})
       dispose=()=>onScan.detachFrom(document)
     }).catch(()=>setError('Δεν φορτώθηκε η υποστήριξη scanner χειρός.'))
     return()=>{cancelled=true;dispose?.()}
@@ -84,9 +84,9 @@ export default function SmartScanPane({products,membership,owner,onSaved,onError
     if(parsed.expiryDate){setExpiry(parsed.expiryDate);setExpiryKind(parsed.expiryKind??'expiry');setExpirySource('gs1');revokeReview()}
     if(parsed.lot){setLot(parsed.lot);revokeReview()}
   }
-  async function consumeBarcode(code:Decoded){
+  async function consumeBarcode(code:Decoded,confirmed=false){
     const raw=code.text.trim()
-    if(!raw||!rawAccepted(raw,performance.now()))return
+    if(!raw||(!confirmed&&!rawAccepted(raw,performance.now())))return
     setScanned(raw)
     const parsed=await parseGs1Scan(code)
     if(parsed)applyGs1(parsed)
