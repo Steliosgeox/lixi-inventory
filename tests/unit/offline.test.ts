@@ -16,7 +16,7 @@ describe('outbox',()=>{
  it('cannot discard another user draft',async()=>{await queueDraft(draft());await discardDraft('draft-1','other');expect(await listDrafts('owner-one','store-one')).toHaveLength(1)})
 })
 
-const smart=(id='smart-1'):SmartCaptureDraft=>({id,owner:'owner-one',store:'store-one',product:'prod-one',code:'0018023',unit:'Τεμάχιο',priceCents:131,expiry:'2026-10-20',expiryKind:'expiry',lot:'LOT1',quantity:1,locationId:null,expirySource:'ocr',created:2,metadata:{reviewed:true,smart_scan:true},image:null,state:'pending',error:'',attempts:0,retryAt:0})
+const smart=(id='smart-1'):SmartCaptureDraft=>({id,owner:'owner-one',store:'store-one',product:'prod-one',code:'0018023',unit:'Τεμάχιο',priceCents:131,observedAt:'2026-09-22T05:00:00Z',expiry:'2026-10-20',expiryKind:'expiry',lot:'LOT1',quantity:1,locationId:null,expirySource:'ocr',created:2,metadata:{reviewed:true,smart_scan:true},image:null,state:'pending',error:'',attempts:0,retryAt:0})
 describe('smart outbox',()=>{
  it('persists the combined capture before sync',async()=>{await queueSmartDraft(smart());expect(api.rpc).not.toHaveBeenCalled();expect(await listSmartDrafts('owner-one','store-one')).toHaveLength(1)})
  it('sends price and expiry through one atomic RPC',async()=>{await queueSmartDraft(smart());await flushSmartDrafts('owner-one','store-one');expect(api.rpc).toHaveBeenCalledTimes(1);expect(api.rpc.mock.calls[0][0]).toBe('commit_smart_capture');expect(api.rpc.mock.calls[0][1]).toMatchObject({p_price_cents:131,p_expiry:'2026-10-20',p_lot:'LOT1'});expect(await listSmartDrafts('owner-one','store-one')).toHaveLength(0)})
