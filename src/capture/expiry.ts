@@ -96,3 +96,16 @@ export function expiryStatus(date:string|null|undefined,days:number|null|undefin
   if(days<=90)return 'monitor' as const
   return 'ok' as const
 }
+
+export function lotCandidates(result:OcrResult):{value:string;score:number|null;text:string}[]{
+  const found:{value:string;score:number|null;text:string}[]=[]
+  const seen=new Set<string>()
+  for(const line of result.lines){
+    const x=fold(line.text)
+    const m=x.match(/(?:\bLOT(?:\s*(?:NO|NUMBER|#))?|\bΠΑΡΤΙΔΑ(?:Σ)?|\bΑΡ\.?\s*ΠΑΡΤΙΔΑΣ)\s*[:#\-]?\s*([A-Z0-9][A-Z0-9._\/-]{2,30})/u)
+    if(!m)continue
+    const value=m[1].replace(/[.,;:]+$/,'')
+    if(!seen.has(value)){seen.add(value);found.push({value,score:line.score,text:line.text})}
+  }
+  return found.sort((a,b)=>(b.score??0)-(a.score??0))
+}
