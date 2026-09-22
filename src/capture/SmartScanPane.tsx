@@ -175,7 +175,7 @@ export default function SmartScanPane({products,membership,owner,onSaved,onError
     setSaving(true);setError('')
     try{
       const cents=price.trim()?parseCents(price):null
-      const draft:SmartCaptureDraft={id:crypto.randomUUID(),owner,store:membership.store_id,product:product.product_id,code:product.internal_code,unit:product.unit??'',priceCents:cents,expiry:expiry||null,expiryKind:expiry?expiryKind:null,lot:lot.trim(),quantity:expiry?Math.max(0,Number(quantity)||1):null,locationId:null,expirySource:expiry?expirySource??'manual':null,created:Date.now(),image:evidence,attempts:0,error:'',retryAt:0,state:'pending',
+      const draft:SmartCaptureDraft={id:crypto.randomUUID(),owner,store:membership.store_id,product:product.product_id,code:product.internal_code,unit:product.unit??'',priceCents:cents,observedAt:new Date().toISOString(),expiry:expiry||null,expiryKind:expiry?expiryKind:null,lot:lot.trim(),quantity:expiry?Math.max(0,Number(quantity)||1):null,locationId:null,expirySource:expiry?expirySource??'manual':null,created:Date.now(),image:evidence,attempts:0,error:'',retryAt:0,state:'pending',
         metadata:{reviewed:true,reviewed_at:new Date().toISOString(),smart_scan:true,product_code:product.internal_code,scanned_identifier:scanned||null,gs1_hri:gs1?.hri??[],ocr_engine:'PaddleOCR.js 0.4.2 / el_PP-OCRv5_mobile_rec',ocr_elapsed_ms:ocrMs,decode_ms:decodeMs,raw_ocr:lastOcrText||null}}
       await queueSmartDraft(draft);await refreshDrafts();navigator.vibrate?.([40,25,40]);onSaved('Smart Scan αποθηκεύτηκε. Έτοιμο για το επόμενο προϊόν.');resetItem();void sync()
     }catch(e){setError(e instanceof Error?e.message:'Η Smart Scan καταγραφή απέτυχε.')}finally{setSaving(false)}
