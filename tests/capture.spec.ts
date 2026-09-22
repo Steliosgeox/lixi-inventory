@@ -12,10 +12,7 @@ async function scanKnown(page:Page){
   await page.getByLabel('Scanner χειρός / Bluetooth keyboard').check()
   await page.waitForTimeout(350)
   await page.locator('.smart-scan-head').click()
-  for(let i=0;i<2;i++){
-    await page.keyboard.type('5201050130807',{delay:2});await page.keyboard.press('Enter')
-    await page.waitForTimeout(120)
-  }
+  await page.keyboard.type('5201050130807',{delay:2});await page.keyboard.press('Enter')
   await expect(page.locator('.smart-field').first()).toContainText('Μουστάρδα')
 }
 
