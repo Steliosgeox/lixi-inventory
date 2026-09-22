@@ -27,6 +27,15 @@ jobs:
         run: |
           sed -i '/checked below using actual compact source/d' scripts/wire-jev.mjs
           node scripts/wire-jev.mjs
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs'
+          const path='supabase/functions/lixi-jev/core.ts'
+          let source=fs.readFileSync(path,'utf8')
+          const old='ocr:v.ocr,barcodes:v.barcodes}'
+          if(!source.includes(old))throw new Error('Typed OCR normalization anchor missing')
+          source=source.replace(old,'ocr:{engine:v.ocr.engine,width:v.ocr.width,height:v.ocr.height,elapsedMs:finite(v.ocr.elapsedMs)&&v.ocr.elapsedMs>=0?v.ocr.elapsedMs:0,lines:v.ocr.lines as Line[]},barcodes:v.barcodes.map((b:any)=>({text:b.text,format:b.format,...(b.symbologyIdentifier?{symbologyIdentifier:b.symbologyIdentifier}:{})}))}')
+          fs.writeFileSync(path,source)
+          NODE
       - run: npm ci --no-audit --no-fund
       - name: Validate Edge server types
         run: deno check --node-modules-dir=manual --no-lock supabase/functions/lixi-jev/server.ts
@@ -39,7 +48,7 @@ jobs:
           rm -f scripts/wire-jev.mjs .github/workflows/jev-toolchain.yml .github/workflows/jev-release-prepare.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src tests public/sw.js package.json package-lock.json scripts/wire-jev.mjs .github/workflows
+          git add src tests supabase/functions public/sw.js package.json package-lock.json scripts/wire-jev.mjs .github/workflows
           git diff --cached --check
           git commit -m 'Release Jev photo automation with verified scanner regressions'
           git push origin HEAD:feat/jev-decisions
