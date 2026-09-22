@@ -52,7 +52,7 @@ function parseDates(text:string,kind:ExpiryKind,now=new Date()):{iso:string;reas
   for(const m of text.matchAll(/(?<!\d)(0?[1-9]|[12]\d|3[01])[\/.\-](0?[1-9]|1[0-2])[\/.\-](\d{2}|20\d{2})(?!\d)/g))
     add(iso(expandYear(+m[3],now),+m[2],+m[1]),'DD-MM-YYYY')
   // Month/year without a day is accepted only next to an expiry semantic marker.
-  if(kind!=='unknown') for(const m of text.matchAll(/(?<![\d.,])(0?[1-9]|1[0-2])[\/.\-](\d{2}|20\d{2})(?!\d)/g)){
+  if(kind!=='unknown') for(const m of text.matchAll(/(?<!\d[\/.\-])(?<![\d.,])(0?[1-9]|1[0-2])[\/.\-](\d{2}|20\d{2})(?!\d)/g)){
     const y=expandYear(+m[2],now), month=+m[1]
     add(iso(y,month,0),'MM-YYYY (month end)')
   }
