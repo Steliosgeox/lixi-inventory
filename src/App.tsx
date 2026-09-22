@@ -3,7 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { X } from '@phosphor-icons/react'
 import Workspace, { ProductHistory } from './ui/Workspace'
 const CaptureCenter = lazy(() => import('./capture/CaptureCenter'))
-import { loadSnapshot, saveSnapshot, purgeSnapshots, flushDrafts } from './capture/offline'
+import { loadSnapshot, saveSnapshot, purgeSnapshots, flushDrafts, flushSmartDrafts } from './capture/offline'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import type { Location, Membership, ProductOverview } from './lib/types'
@@ -96,7 +96,7 @@ function App() {
     if (!session || !membership) return
     let active = true
     const sync = async () => {
-      try { const count = await flushDrafts(session.user.id, membership.store_id); if (active && count) await loadWorkspace(session) } catch { /* pending records remain durable and visible in Capture */ }
+      try { const [prices,smart] = await Promise.all([flushDrafts(session.user.id, membership.store_id),flushSmartDrafts(session.user.id, membership.store_id)]); if (active && (prices || smart)) await loadWorkspace(session) } catch { /* pending records remain durable and visible in Capture */ }
     }
     const wake = () => { if (!document.hidden) void sync() }
     const timer = setInterval(() => { void sync() }, 30000)
@@ -351,6 +351,7 @@ function ProductEditor({ draft, setDraft, locations, onClose, onSave, saving, re
           <div className="form-grid three"><label>Θέση<select value={draft.locationCode} onChange={e => setDraft({ ...draft, locationCode: e.target.value })}><option value="">Χωρίς θέση</option>{locations.map(x => <option key={x.id} value={x.code}>{x.name}</option>)}</select></label><label>Σειρά<input value={draft.rowLabel} onChange={e => setDraft({ ...draft, rowLabel: e.target.value })} /></label><label>Αριθμός<input value={draft.numberLabel} onChange={e => setDraft({ ...draft, numberLabel: e.target.value })} /></label></div>
         </fieldset>
         <div className="read-only-card"><span>Τελευταία τιμή ραφιού · {draft.product.unit || '—'}</span><strong>{money(draft.product.shelf_price)}</strong><small>{draft.product.source_ref || 'Χωρίς καταγραφή ραφιού'}</small></div>
+        <div className={"read-only-card expiry "+(draft.product.expiry_status ?? 'untracked')}><span>Κοντινότερη λήξη</span><strong>{draft.product.nearest_expiry ? new Intl.DateTimeFormat('el-GR',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'UTC'}).format(new Date(draft.product.nearest_expiry+'T00:00:00Z')) : '—'}</strong><small>{draft.product.days_until_expiry == null ? 'Δεν υπάρχει καταγεγραμμένη παρτίδα' : draft.product.days_until_expiry < 0 ? 'Έχει λήξει' : draft.product.days_until_expiry+' ημέρες · '+(draft.product.expiry_batch_count ?? 0)+' παρτίδες'}</small></div>
         {error && <p role="alert" className="wk-form-error">{error}</p>}
         <ProductHistory product={draft.product} /></div>
         <div className="wk-drawer-actions">{!readOnly && <button type="submit" className="wk-button primary" disabled={saving}>{saving ? 'Αποθήκευση…' : 'Αποθήκευση αλλαγών'}</button>}<button type="button" className="wk-button" disabled={saving} onClick={onClose}>Κλείσιμο</button></div>
