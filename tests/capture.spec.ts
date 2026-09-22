@@ -21,6 +21,17 @@ test('hardware scanner locks a product inside Smart Scan without changing screen
   await expect(page.getByRole('button',{name:'Επιβεβαίωση → επόμενο προϊόν',exact:true})).toBeDisabled()
 })
 
+test('GS1 DataMatrix scanner fills product expiry and lot in one scan',async({page})=>{
+  await page.getByLabel('Scanner χειρός / Bluetooth keyboard').check()
+  await page.waitForTimeout(350)
+  await page.locator('.smart-scan-head').click()
+  await page.keyboard.type(']d201052010501308071726093010LOT-A1',{delay:2});await page.keyboard.press('Enter')
+  await expect(page.locator('.smart-field').first()).toContainText('Μουστάρδα')
+  await expect(page.getByLabel('Smart Scan λήξη')).toHaveValue('2026-09-30')
+  await expect(page.getByLabel('Smart Scan lot')).toHaveValue('LOT-A1')
+  await expect(page.getByText('Από GS1 barcode — δομημένο πεδίο',{exact:true})).toBeVisible()
+})
+
 test('permission rejection leaves Smart Scan recoverable',async({page})=>{
   await page.evaluate(()=>{navigator.mediaDevices.getUserMedia=async()=>{throw new DOMException('Camera permission denied','NotAllowedError')}})
   const open=page.getByRole('button',{name:'Έναρξη Smart Scan',exact:true})
