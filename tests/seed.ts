@@ -32,7 +32,7 @@ export async function seed(page: Page) {
     await route.fulfill({ status: 200, headers, body: JSON.stringify(body) })
   })
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Η απογραφή, σε τάξη.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Έλεγχος καταλόγου' })).toBeVisible()
 }
 async function catalog(page: Page) { await page.locator('nav button:visible').filter({ hasText: 'Κατάλογος' }).first().click() }
 
