@@ -20,3 +20,6 @@
 [data-theme=dark] .capture-pane{background:#18221e;border-color:#435249;color:#ecf1ed}[data-theme=dark] .capture-field input,[data-theme=dark] .capture-engine select{background:#202e27;color:#f1f5f2;border-color:#617068}[data-theme=dark] .capture-product,[data-theme=dark] .capture-center .scan-result{background:#22332a;color:#eff4f0}[data-theme=dark] .capture-warning{background:#3b2b15;color:#ffdea3;border-color:#8b744c}
 @media(max-width:640px){.capture-pane{padding:16px;border-radius:12px}.capture-form-grid{grid-template-columns:1fr;gap:0}.capture-tabs .wk-button{flex:1;padding:10px 8px;font-size:12px}.capture-engine{width:100%}.capture-engine select{flex:1}.capture-heading h2{font-size:20px}.capture-doc-rows>div{grid-template-columns:75px 1fr}.capture-doc-rows small{grid-column:1/3}.capture-doc-rows b{grid-column:2}.capture-video{aspect-ratio:4/3}}
 @media(prefers-reduced-motion:reduce){.capture-spinner{animation:none}}
+
+.capture-preview.is-cropping{touch-action:none;cursor:crosshair}
+.capture-preview:not(.is-cropping){cursor:auto}
