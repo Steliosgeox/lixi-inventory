@@ -11,6 +11,7 @@ const TRIGGER_DISTANCE=64
 const MAX_DISTANCE=96
 
 function isScrollGesture(target:EventTarget|null){
+  if(window.scrollY>0)return true
   let node=target instanceof Element?target:null
   if(node?.closest('[role="dialog"], [data-radix-popper-content-wrapper]'))return true
   while(node){if((node as HTMLElement).scrollTop>0)return true;node=node.parentElement}
