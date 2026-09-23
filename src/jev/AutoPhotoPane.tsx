@@ -105,7 +105,7 @@ export default function AutoPhotoPane({products,membership,owner,onSaved,onError
    <label className="wk-button jev-files"><Images size={20}/>Από φωτογραφίες<input className="sr-only" aria-label="Φωτογραφίες για αυτόματη καταχώριση" type="file" accept="image/*" multiple onChange={e=>{void files([...(e.target.files??[])]);e.target.value=''}}/></label>
   </div>
   <div className={'jev-now '+(latestCode?'has-scan':'')}><div><span>ΤΕΛΕΥΤΑΙΑ ΣΑΡΩΣΗ</span><strong>{latestProduct?.description||latestCode||'Περιμένω barcode…'}</strong><small>{latestCode?(latestProduct?latestCode+' · '+latestProduct.internal_code:latestCode+' · νέο / χωρίς mapping στη βάση'):'Με το που κλειδώσει barcode γίνεται λήψη και μπορείς να πας αμέσως στο επόμενο.'}</small></div><b>{latestCode?'Επόμενο →':'AUTO'}</b></div>
-  {message&&<p className="jev-message" role="status">{message}</p>
+  {message&&<p className="jev-message" role="status">{message}</p>}
   <div className="jev-queue-header"><h3>Ουρά καταγραφών <span>{pending} αναμονή · {review} για έλεγχο</span></h3><button className="wk-icon" aria-label="Ανανέωση κατάστασης Jev" onClick={()=>{void drain();void status()}}><ArrowClockwise size={19}/></button></div>
   <div className="jev-jobs">{jobs.length?jobs.slice(0,20).map(j=><article className={'jev-job '+j.state} key={j.id}>
    {j.state==='committed'?<CheckCircle size={21}/>:j.state==='review'||j.state==='error'?<WarningCircle size={21}/>:<Clock size={21}/>}
