@@ -6,6 +6,7 @@ import { flexRender, type SortingState, type RowSelectionState } from '@tanstack
 import type { ProductOverview, Location, Membership, ExpiryBatchOverview } from '../lib/types'
 import { money, signed, normalize, searchProducts, matches, labels, exportProducts, dateLabel, type Filter } from './data'
 import { supabase } from '../lib/supabase'
+import PullToRefresh from './PullToRefresh'
 
 export type Page = 'dashboard' | 'products' | 'audit' | 'expiry' | 'locations' | 'activity' | 'scan' | 'settings'
 const navigation = [
@@ -44,10 +45,12 @@ export default function Workspace({ products, locations, membership, email, load
   const differences = products.filter(p => p.price_status === 'different')
   const expiryAttention = products.filter(p => ['expired','critical','warning'].includes(p.expiry_status ?? 'untracked'))
   const current = navigation.find(n => n.id === page)!
+  const mobileNavigation = (['dashboard','products','scan','expiry','settings'] as Page[]).map(id => navigation.find(n => n.id === id)!)
   const jump = (p: Page, f: Filter = 'all', loc = 'all') => { setPage(p); setFilter(f); setLocationFilter(loc); setQuery(''); setMenuOpen(false); window.scrollTo({ top: 0, behavior: 'instant' }) }
   const find = (p: ProductOverview) => { setCommandOpen(false); onEdit(p) }
   const now = new Intl.DateTimeFormat('el-GR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Athens' }).format(new Date())
   return <div className="wk-shell">
+    <PullToRefresh refresh={onRefresh} refreshing={loading} />
     <a className="wk-skip" href="#workspace-content">Μετάβαση στο περιεχόμενο</a>
     <aside className="wk-sidebar">
       <a className="wk-brand" href="#" onClick={e => { e.preventDefault(); jump('dashboard') }} aria-label="Leaksy αρχική"><span className="wk-logo"><Package size={25} weight="duotone" /></span><span>leaksy<span className="wk-brand-sub">INVENTORY WORKSPACE</span></span></a>
@@ -57,7 +60,7 @@ export default function Workspace({ products, locations, membership, email, load
       <div className="wk-side-tip"><Barcode size={24} /><b>Λιγότερη πληκτρολόγηση.</b><p>Βρες το είδος με την κάμερα και κατέγραψε την τιμή του.</p><button onClick={() => jump('scan')}>Άνοιγμα σαρωτή <ArrowUpRight size={16} /></button></div>
       <div className="wk-account"><span className="wk-avatar">{(email || 'L').slice(0,2).toUpperCase()}</span><div><b>{email?.split('@')[0] || 'Λογαριασμός'}</b><small>{membership.role === 'owner' ? 'Ιδιοκτήτης' : membership.role}</small></div><button className="wk-icon" aria-label="Ρυθμίσεις λογαριασμού" onClick={() => jump('settings')}><SlidersHorizontal size={18} /></button></div>
     </aside>
-    <div className="wk-main">
+    <div className="wk-main" data-page={page}>
       <header className="wk-top"><div className="wk-top-leading"><button className="wk-icon wk-menu-trigger" aria-label="Όλες οι ενότητες" aria-haspopup="dialog" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><List size={21} /></button><div className="wk-breadcrumb"><span>Χώρος εργασίας</span><CaretRight size={13} /><strong>{current.title}</strong></div></div><div className="wk-top-actions"><button className="wk-command" aria-label="Αναζήτηση προϊόντος" onClick={() => setCommandOpen(true)}><MagnifyingGlass size={17} /><span>Αναζήτηση προϊόντος</span><kbd>⌘ K</kbd></button><button className="wk-icon" aria-label={theme === 'light' ? 'Σκούρο θέμα' : 'Φωτεινό θέμα'} onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={19} /> : <Sun size={19} />}</button><button className="wk-icon" aria-label="Ανανέωση δεδομένων" disabled={loading} onClick={onRefresh}><ArrowClockwise size={19} className={loading ? 'wk-spin' : ''} /></button></div></header>
       <main id="workspace-content" className="wk-content" tabIndex={-1}>
         <div className="wk-page-title"><div><div className="wk-overline">{page === 'dashboard' ? now : 'LEAKSY / ' + current.title}</div><h1>{page === 'dashboard' ? 'Έλεγχος καταλόγου' : current.title}</h1><p>{page === 'dashboard' ? `${differences.length} διαφορές τιμών · ${products.length - checked} προϊόντα χωρίς τιμή ραφιού.` : page === 'products' ? 'Κωδικοί, τιμές και θέσεις. Όλα σε ένα σημείο.' : page === 'audit' ? 'Σύγκρινε τον κατάλογο με τις καταγεγραμμένες τιμές ραφιού.' : page === 'locations' ? 'Πραγματικές θέσεις από τον κατάλογο. Όχι εκτιμήσεις.' : page === 'activity' ? 'Οι τελευταίες διαθέσιμες παρατηρήσεις ανά προϊόν.' : page === 'expiry' ? 'Παρτίδες που έχουν λήξει ή πλησιάζουν τη λήξη, με προτεραιότητα και monitoring.' : page === 'scan' ? 'Smart Scan: προϊόν, τιμή, λήξη και lot στην ίδια συνεχή διαδικασία.' : 'Η πρόσβαση και οι προτιμήσεις του χώρου σου.'}</p></div><div className="wk-title-actions">{page !== 'scan' && <button className="wk-button primary" onClick={() => jump('scan')}><Plus size={17} />Νέα καταγραφή</button>}</div></div>
@@ -74,7 +77,7 @@ export default function Workspace({ products, locations, membership, email, load
         <footer className="wk-footer"><span><span className={`wk-live-dot ${!online || !lastSynced ? 'offline' : ''}`} />{lastSynced ? `Τελευταία λήψη ${lastSynced.toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' })}` : 'Αναμονή δεδομένων'}</span><span>{products.length} προϊόντα · {checked} με τιμή ραφιού <span className="wk-footer-version">WORKSPACE 0.3</span></span></footer>
       </main>
     </div>
-    <nav className="wk-mobile-nav" aria-label="Πλοήγηση κινητού">{navigation.filter(n => ['dashboard','products','expiry','scan','settings'].includes(n.id)).map(n => <button key={n.id} aria-current={page === n.id ? 'page' : undefined} className={page === n.id ? 'is-active' : ''} onClick={() => jump(n.id, n.id === 'audit' ? 'different' : 'all')}><n.icon size={21} weight={page === n.id ? 'fill' : 'regular'} /><span>{n.id === 'dashboard' ? 'Αρχική' : n.id === 'scan' ? 'Σάρωση' : n.id === 'expiry' ? 'Λήξεις' : n.title}</span></button>)}</nav>
+    <nav className="wk-mobile-nav" aria-label="Πλοήγηση κινητού">{mobileNavigation.map(n => <button key={n.id} data-page={n.id} aria-current={page === n.id ? 'page' : undefined} className={page === n.id ? 'is-active' : ''} onClick={() => jump(n.id, n.id === 'audit' ? 'different' : 'all')}><n.icon size={n.id === 'scan' ? 25 : 21} weight={page === n.id ? 'fill' : 'regular'} /><span>{n.id === 'dashboard' ? 'Αρχική' : n.id === 'scan' ? 'Σάρωση' : n.id === 'expiry' ? 'Λήξεις' : n.title}</span></button>)}</nav>
     <Dialog.Root open={menuOpen} onOpenChange={setMenuOpen}><Dialog.Portal>
       <Dialog.Overlay className="wk-overlay" />
       <Dialog.Content className="wk-mobile-menu">
