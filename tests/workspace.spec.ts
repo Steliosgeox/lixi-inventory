@@ -107,7 +107,8 @@ test('command search finds codes and theme persists', async ({ page }, info) => 
 })
 test('manual barcode resolves product without camera', async ({ page }) => {
   await page.getByRole('button', { name: 'Νέα καταγραφή', exact: true }).click()
-  await page.getByRole('button',{name:'Smart Scan',exact:true}).click()
+  await page.locator('.capture-fallbacks summary').click()
+  await page.locator('.capture-fallbacks').getByRole('button',{name:'Smart Scan',exact:true}).click()
   await page.getByLabel('Κωδικός ή barcode').fill('0000001')
   await expect(page.locator('.scan-result.hit')).toContainText('Μουστάρδα')
 })
