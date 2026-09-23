@@ -1,0 +1,241 @@
+/*
+ * Leaksy UI density/layout adaptation inspired by marmelab/atomic-crm (MIT).
+ * See THIRD_PARTY_NOTICES.md.
+ */
+:root{
+  --atomic-radius:10px;
+  --atomic-control:36px;
+  --atomic-content:1280px;
+}
+.atomic-pull-refresh{position:fixed;inset-inline:0;top:0;z-index:80;display:flex;justify-content:center;pointer-events:none}
+.atomic-pull-refresh>div{margin-top:-48px;width:40px;height:40px;border-radius:999px;display:grid;place-items:center;background:var(--panel);color:var(--text);border:1px solid var(--line);box-shadow:0 8px 24px #0002}
+
+/* Desktop density: closer to Atomic CRM's restrained admin layout. */
+.wk-top{height:58px;padding-inline:20px}
+.wk-content{max-width:var(--atomic-content);padding:22px 20px 16px}
+.wk-page-title{margin-bottom:18px}
+.wk-page-title h1{font-size:25px;letter-spacing:-.45px}
+.wk-page-title p{margin-top:6px}
+.wk-button{min-height:var(--atomic-control);padding:7px 11px;border-radius:7px}
+.wk-icon{width:var(--atomic-control);height:var(--atomic-control)}
+.wk-card,.wk-metrics{border-radius:var(--atomic-radius);box-shadow:none}
+.wk-card-head{padding:16px 18px 14px}
+.wk-metric{padding:16px 18px}
+.wk-metric>strong{font-size:30px;margin:12px 0 8px}
+.wk-exception,.wk-activity-row,.wk-task{padding-block:11px}
+.wk-table td{padding-block:9px}
+.wk-tools{padding:12px 16px}
+.wk-table-tabs{padding-inline:16px}
+.wk-pagination{padding:11px 16px}
+
+/* Atomic-style compact mobile workspace. */
+@media (max-width:760px),(max-width:1024px) and (max-height:600px){
+  :root{
+    --atomic-control:40px;
+    --mobile-nav-height:calc(58px + var(--safe-bottom));
+  }
+  .wk-top{height:auto}
+  body{overscroll-behavior-y:none}
+  .wk-top .wk-icon,.wk-top .wk-command{width:44px;height:44px;min-width:44px;border-radius:8px}
+  .wk-top-leading{gap:4px}
+  .wk-breadcrumb{font-size:15px;font-weight:600}
+  .wk-content{
+    max-width:none;
+    padding:12px max(12px,var(--safe-right)) calc(var(--mobile-nav-height) + 16px) max(12px,var(--safe-left));
+  }
+  .wk-page-title{margin:0 0 10px;gap:4px}
+  .wk-overline{display:none}
+  .wk-page-title h1{font-size:22px;line-height:1.2;letter-spacing:-.35px}
+  .wk-page-title p{display:none}
+  .wk-title-actions{display:flex;position:absolute;right:max(12px,var(--safe-right));top:calc(var(--safe-top) + 64px);z-index:2}
+  .wk-title-actions .wk-button{width:40px;height:40px;min-height:40px;padding:0;font-size:0;border-radius:8px}
+  .wk-title-actions .wk-button svg{width:18px;height:18px}
+  .wk-main[data-page="scan"] .wk-page-title{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .wk-main[data-page="scan"] .wk-content{padding-top:8px}
+  .wk-main[data-page="settings"] .wk-page-title{margin-bottom:8px}
+
+  .wk-card,.wk-metrics{border-radius:10px}
+  .wk-card-head{padding:13px 14px}
+  .wk-card-head h2{font-size:14px}
+  .wk-section-kicker{margin-bottom:4px}
+  .wk-metrics{margin-bottom:10px}
+  .wk-metric{padding:12px 13px;min-height:88px}
+  .wk-metric>div:first-child{font-size:10px;line-height:1.25}
+  .wk-metric>div:first-child svg{width:15px;height:15px}
+  .wk-metric>strong{font-size:25px;margin:8px 0 0}
+  .wk-metric>strong svg,.wk-metric small,.wk-mini-track{display:none}
+  .wk-dashboard-grid{gap:10px}
+  .wk-priority .wk-card-head p,.wk-priority .wk-section-kicker{display:none}
+  .wk-exception{padding:10px 14px;min-height:62px}
+  .wk-exception-head{display:none}
+  .wk-exception .wk-product-symbol{display:none}
+  .wk-product-cell strong{font-size:13px;line-height:1.25;-webkit-line-clamp:1;white-space:nowrap}
+  .wk-product-cell small{font-size:10px;margin-top:2px}
+  .wk-mobile-price-pair{margin-top:3px;font-size:10px}
+  .wk-delta{font-size:11px;padding:3px 6px}
+  .wk-coverage{grid-template-columns:108px 1fr}
+  .wk-ring{width:104px;height:104px;margin:4px}
+  .wk-ring strong{font-size:22px}
+  .wk-ring span{display:none}
+  .wk-legend{gap:7px;margin:6px 12px 8px 0}
+  .wk-legend>span{font-size:10px}
+  .wk-coverage>.wk-button{min-height:38px;margin:0 12px 12px}
+  .wk-task{min-height:54px;padding:10px 14px}
+  .wk-task b{font-size:12px}
+  .wk-task small{font-size:10px}
+  .wk-activity-row{padding:9px 14px}
+  .wk-footer{display:flex;font-size:9px;line-height:1.4;padding-top:10px;opacity:.72}
+
+  /* Mobile catalogue: full-width, list-like, no oversized product cards. */
+  .wk-catalogue{margin-inline:0;border-radius:10px;overflow:hidden}
+  .wk-table-tabs{
+    gap:18px;
+    padding:0 14px;
+    min-height:42px;
+    scrollbar-width:none;
+  }
+  .wk-table-tabs::-webkit-scrollbar{display:none}
+  .wk-table-tabs>button{min-height:42px;padding:10px 0 8px;font-size:12px}
+  .wk-table-tabs>button>span{font-size:9px;padding:0 4px}
+  .wk-tools{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 40px 40px;
+    gap:8px;
+    padding:10px 12px 8px;
+  }
+  .wk-search{
+    min-height:40px;
+    padding:7px 10px;
+    border-radius:8px;
+    grid-column:1/-1;
+    flex-basis:auto;
+  }
+  .wk-search input{font-size:16px}
+  .wk-select{display:flex;grid-column:1;min-height:40px;height:40px;padding:5px 8px;overflow:hidden}
+  .wk-select svg{width:15px;height:15px;flex:0 0 auto}
+  .wk-select select{min-width:0;width:100%;max-width:none;font-size:11px;background:transparent}
+  .wk-tools>.wk-button{
+    width:40px;height:40px;min-height:40px;padding:0;
+    border-radius:8px;
+  }
+  .wk-tools>.wk-button span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .wk-tools>.wk-icon{width:40px;height:40px;min-width:40px;min-height:40px}
+  .wk-filter-tag{grid-column:1/-1;justify-self:start;padding:6px 8px}
+  .wk-mobile-table-tools{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:6px 12px 8px;
+  }
+  .wk-mobile-table-tools label{min-height:36px;font-size:10px;display:flex;align-items:center;gap:6px}
+  .wk-mobile-table-tools input{width:17px;height:17px}
+  .wk-sort{margin-left:auto}
+  .wk-sort select{height:36px;min-height:36px;max-width:155px;padding:4px 7px;font-size:11px}
+
+  .wk-table tbody tr{
+    display:grid;
+    grid-template-columns:24px minmax(0,1fr) auto;
+    grid-template-areas:
+      "check product difference"
+      "check catalog shelf"
+      "check location state";
+    gap:0 8px;
+    padding:6px 12px;
+    min-height:64px;
+    align-items:center;
+  }
+  .wk-table tbody td{font-size:11px}
+  .wk-table tbody td[data-column=select]{grid-area:check;display:block;padding:0;align-self:start}
+  .wk-table tbody td[data-column=description]{grid-area:product;padding:0}
+  .wk-table tbody td[data-column=catalog_price]{grid-area:catalog;padding:0;color:var(--muted);font-size:11px}
+  .wk-table tbody td[data-column=shelf_price]{grid-area:shelf;padding:0;text-align:right;font-size:11px}
+  .wk-table tbody td[data-column=price_diff]{grid-area:difference;padding:0;text-align:right;align-self:start}
+  .wk-table tbody td[data-column=location_code]{grid-area:location;padding:0;font-size:10px}
+  .wk-table tbody td[data-column=state]{grid-area:state;padding:0;text-align:right;font-size:10px}
+  .wk-table td[data-column=catalog_price]::before,
+  .wk-table td[data-column=shelf_price]::before,
+  .wk-table td[data-column=price_diff]::before{display:none}
+  .wk-table-product{min-height:28px;gap:0;max-width:none;width:100%}
+  .wk-table-product .wk-product-symbol{display:none}
+  .wk-table-product strong{font-size:13px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:none}
+  .wk-table-product small{font-size:9.5px;margin-top:0}
+  .wk-checkbox-target{width:24px;min-width:24px;min-height:24px;display:grid;place-items:start center}
+  .wk-table input[type=checkbox]{width:17px;height:17px;margin-top:1px}
+  .wk-location-tag,.wk-state{font-size:9px}
+  .wk-state i{width:4px;height:4px}
+  .wk-pagination{padding:9px 14px;font-size:10px;gap:6px}
+  .wk-pagination label{display:none}
+  .wk-pagination .wk-icon{width:34px;height:34px;min-width:34px;min-height:34px}
+  .wk-card-foot{display:none}
+
+  /* Atomic CRM-style bottom nav: quiet destinations, one prominent scan action. */
+  .wk-mobile-nav{
+    min-height:var(--mobile-nav-height);
+    height:var(--mobile-nav-height);
+    padding:2px max(5px,var(--safe-right)) var(--safe-bottom) max(5px,var(--safe-left));
+    align-items:start;
+  }
+  .wk-mobile-nav button{
+    min-height:56px;
+    height:56px;
+    gap:2px;
+    padding:5px 1px 4px;
+    border-radius:8px;
+    font-size:9.5px;
+    background:transparent!important;
+    color:var(--muted);
+    overflow:visible;
+  }
+  .wk-mobile-nav button.is-active{color:var(--text);font-weight:600}
+  .wk-mobile-nav button[data-page="scan"]{
+    width:58px;
+    height:58px;
+    min-height:58px;
+    justify-self:center;
+    margin-top:-12px;
+    border-radius:999px;
+    background:var(--accent)!important;
+    color:var(--panel);
+    box-shadow:0 5px 16px color-mix(in srgb,var(--accent) 28%,transparent);
+  }
+  .wk-mobile-nav button[data-page="scan"] span{font-size:9px;color:inherit}
+  .wk-mobile-nav button[data-page="scan"] svg{width:25px;height:25px}
+  .wk-mobile-nav button:not([data-page="scan"]) svg{width:20px;height:20px}
+
+  .wk-expiry-page{gap:10px}
+  .wk-expiry-kpis{gap:7px}
+  .wk-expiry-kpi{padding:10px 11px;gap:3px;min-height:76px}
+  .wk-expiry-kpi small{font-size:8.5px}
+  .wk-expiry-kpi strong{font-size:23px}
+  .wk-expiry-kpi span{font-size:9px}
+  .wk-expiry-row{padding:10px 12px;gap:7px;min-height:66px}
+  .wk-expiry-date b{font-size:12px}
+  .wk-expiry-date small,.wk-expiry-meta small{font-size:9px}
+  .wk-expiry-pill{font-size:9px;padding:3px 6px}
+
+  .wk-locations{gap:8px}
+  .wk-location-card,.wk-unmapped{padding:12px}
+  .wk-location-label{width:42px;height:42px;font-size:21px;margin-bottom:10px}
+  .wk-location-card>.wk-location-open{margin-top:10px;padding-top:8px}
+
+  .wk-theme-setting{padding:12px}
+  .wk-legacy>.settings-grid{gap:10px}
+  .wk-drawer-head{padding:12px 14px}
+  .wk-drawer-scroll{padding:14px}
+  .wk-drawer-actions{padding:10px 14px max(10px,var(--safe-bottom))}
+}
+
+@media(max-width:360px){
+  .wk-content{padding-inline:max(10px,var(--safe-left)) max(10px,var(--safe-right))}
+  .wk-page-title h1{font-size:20px}
+  .wk-metric{padding:10px}
+  .wk-metric>strong{font-size:23px}
+  .wk-table tbody tr{padding-inline:9px;grid-template-columns:22px minmax(0,1fr) auto}
+  .wk-table-product strong{font-size:12px}
+  .wk-mobile-nav button{font-size:9px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .atomic-pull-refresh>div{transition:none}
+}

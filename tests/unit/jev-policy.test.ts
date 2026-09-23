@@ -26,5 +26,20 @@ describe('Jev evidence policy',()=>{
  it('rejects a low-confidence OCR-only identity',()=>{const i=input('0036197','1,95 €');i.barcodes=[];i.ocr.lines[0].score=.4;const b=buildBundle(i,[item]);expect(decide(b,answers(b)).reasons).toContain('low_ocr_identifier')})
  it('uses a checksum-valid decoded match even when the printed internal code is unclear',()=>{const i=input('0036197','1,95 €');i.ocr.lines[0].score=.4;const b=buildBundle(i,[item]);expect(decide(b,answers(b)).reasons).not.toContain('low_ocr_identifier')})
  it('quarantines two different structured batches in one capture',()=>{const b=buildBundle(input('1,95 €'),[item],[{gtin:item.barcode,expiryDate:'2026-10-20',expiryKind:'expiry',lot:'LOT1'},{gtin:item.barcode,expiryDate:'2026-11-20',expiryKind:'expiry',lot:'LOT2'}]);expect(decide(b,answers(b)).reasons).toContain('multiple_batches')})
+ it('uses a strong Open Facts hint to identify an existing catalogue row that is missing its barcode',()=>{
+  const peanut={...item,barcode:null,internal_code:'0099999',description:'ΕΛΛΗΝΙΚΟΣ ΚΑΡΠΟΣ ΦΥΣΤΙΚΟΒΟΥΤΥΡΟ 1000GR'}
+  const i=input('ΦΥΣΤΙΚΟΒΟΥΤΥΡΟ','1000GR');i.barcodes=[{text:'5200112412912',format:'EAN13'}]
+  const b=buildBundle(i,[peanut],[],[{gtin:'5200112412912',name:'ΦΥΣΤΙΚΟΒΟΥΤΥΡΟ ΕΛΛΗΝΙΚΟΣ ΚΑΡΠΟΣ',brand:'ΕΛΛΗΝΙΚΟΣ ΚΑΡΠΟΣ',quantity:'1000gr',source:'Open Facts'}])
+  expect(Object.values(b.items)).toContainEqual(expect.objectContaining({id:peanut.id,identity_source:'open_facts'}))
+  const d=decide(b,answers(b))
+  expect(d).toMatchObject({status:'approved',plan:{product_id:peanut.id,barcode:'5200112412912',price_cents:null,expiry_date:null}})
+ })
+ it('keeps barcode-only scans in review when the external identity hint is weak',()=>{
+  const peanut={...item,barcode:null,internal_code:'0099999',description:'ΕΛΛΗΝΙΚΟΣ ΚΑΡΠΟΣ ΦΥΣΤΙΚΟΒΟΥΤΥΡΟ 1000GR'}
+  const i=input('ΔΙΑΤΡΟΦΙΚΑ ΣΤΟΙΧΕΙΑ');i.barcodes=[{text:'5200112412912',format:'EAN13'}]
+  const b=buildBundle(i,[peanut],[],[{gtin:'5200112412912',name:'ΑΓΝΩΣΤΟ ΠΡΟΪΟΝ',brand:'OTHER',quantity:'',source:'Open Facts'}])
+  expect(Object.keys(b.items)).toHaveLength(0)
+  expect(decide(b,answers(b)).status).toBe('review')
+ })
 
 })

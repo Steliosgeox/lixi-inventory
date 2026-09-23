@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4'
 import { GS1encoder } from 'npm:gs1encoder@1.4.1'
-import { buildBundle,callJev,validateInput,validGtin,MODEL,ENDPOINT,type CaptureInput,type Product,type StructuredBarcode } from './core.ts'
+import { buildBundle,callJev,validateInput,validGtin,MODEL,ENDPOINT,type CaptureInput,type Product,type StructuredBarcode,type ExternalHint } from './core.ts'
 const url=Deno.env.get('SUPABASE_URL')??''
 const secret=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')??''
 const db=()=>createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}})
@@ -38,6 +38,20 @@ async function structuredCodes(input:CaptureInput):Promise<StructuredBarcode[]> 
  }catch{/* Invalid GS1 is not converted to an invented GTIN/date. */}}}finally{encoder.free()}
  return result
 }
+async function openFactsHints(input:CaptureInput):Promise<ExternalHint[]> {
+ const gtins=[...new Set(input.barcodes.map(b=>b.text.trim()).filter(validGtin))]
+ if(gtins.length!==1)return []
+ const gtin=gtins[0]
+ try{
+  const endpoint='https://world.openfoodfacts.org/api/v3/product/'+encodeURIComponent(gtin)+'?fields=code,product_name,product_name_el,brands,quantity&product_type=all'
+  const response=await fetch(endpoint,{redirect:'follow',signal:AbortSignal.timeout(3500),headers:{'User-Agent':'LeaksyInventory/0.6 (https://lixi-inventory.vercel.app)'}})
+  if(!response.ok)return []
+  const body=await response.json(),p=body?.product
+  if(!p||typeof p!=='object')return []
+  const name=String(p.product_name_el||p.product_name||'').trim();if(!name)return []
+  return [{gtin,name,brand:String(p.brands||'').trim(),quantity:String(p.quantity||'').trim(),source:'Open Facts'}]
+ }catch{return []}
+}
 async function catalogue(client:DB,store:string):Promise<Product[]> {
  const out:Product[]=[]
  for(let offset=0;offset<10000;offset+=1000){const {data,error}=await client.from('products').select('id,internal_code,barcode,description,unit,updated_at,catalog_price').eq('store_id',store).eq('active',true).order('id').range(offset,offset+999);if(error)throw new Error('catalogue_unavailable');out.push(...(data??[]));if(!data||data.length<1000)return out}
@@ -58,18 +72,22 @@ async function processCapture(client:DB,user:string,input:CaptureInput){
   const {data:image,error:downloadError}=await client.storage.from('capture-evidence').download(input.evidencePath)
   if(downloadError||!image||image.size>8*1024*1024)throw new Error('evidence_unavailable')
   if(await sha(await image.arrayBuffer())!==input.imageHash)throw new Error('evidence_hash_mismatch')
-  const [{data:budget,error:budgetError},items,structured]=await Promise.all([client.rpc('jev_take_budget',{p_store:input.storeId}),catalogue(client,input.storeId),structuredCodes(input)])
+  const [{data:budget,error:budgetError},items,structured,hints]=await Promise.all([client.rpc('jev_take_budget',{p_store:input.storeId}),catalogue(client,input.storeId),structuredCodes(input),openFactsHints(input)])
   if(budgetError||!budget)throw new Error('budget_limit')
   const {data:row}=await client.from('ai_capture_runs').select('attempts').eq('id',input.id).single()
   await client.from('ai_capture_runs').update({attempts:(row?.attempts??0)+1}).eq('id',input.id)
-  const response=await callJev(buildBundle(input,items,structured),key)
-  const {data:committed,error:saveError}=await client.rpc('finish_jev_capture',{p_id:input.id,p_user:user,p_model:response.model,p_decision:response.decision})
-  if(saveError){
+  const response=await callJev(buildBundle(input,items,structured,hints),key)
+  const plan=response.decision.plan as Record<string,unknown>|null
+  const barcodeOnly=response.decision.status==='approved'&&!!plan&&!plan.new_product&&typeof plan.barcode==='string'&&plan.price_cents==null&&plan.expiry_date==null
+  const committed=barcodeOnly
+   ? await client.rpc('commit_jev_barcode_mapping',{p_capture:input.id,p_user:user,p_model:response.model,p_decision:response.decision})
+   : await client.rpc('finish_jev_capture',{p_id:input.id,p_user:user,p_model:response.model,p_decision:response.decision})
+  if(committed.error){
    const review={...response.decision,status:'review',reasons:['catalogue_or_evidence_changed']}
    const result=await client.rpc('finish_jev_capture',{p_id:input.id,p_user:user,p_model:response.model,p_decision:review})
    if(result.error)throw new Error('commit_failed');return result.data
   }
-  return committed
+  return committed.data
  }catch(e){
   const code=allowedError(e)
   await client.from('ai_capture_runs').update({state:'failed',error_code:code,updated_at:new Date().toISOString()}).eq('id',input.id).eq('state','processing')
