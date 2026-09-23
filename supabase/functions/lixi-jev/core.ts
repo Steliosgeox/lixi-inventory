@@ -40,7 +40,7 @@ export function buildBundle(input:CaptureInput,products:Product[],structured:Str
  const codes=[...new Set([...raw.matchAll(/(?<!\d)\d{7}(?!\d)/g)].map(m=>m[0]))]
  const decoded=[...new Set([...input.barcodes.filter(b=>validGtin(b.text)).map(b=>b.text),...structured.map(b=>b.gtin).filter((s):s is string=>!!s&&validGtin(s))])]
  const direct=products.filter(p=>codes.includes(p.internal_code)||(p.barcode&&decoded.some(b=>norm(b)===norm(p.barcode!))))
- let matching=direct.map(p=>({product:p,source:'exact' as const,score:1}))
+ let matching:{product:Product;source:'exact'|'open_facts';score:number}[]=direct.map(p=>({product:p,source:'exact',score:1}))
  if(!matching.length&&decoded.length===1){
   const hint=externalHints.find(h=>norm(h.gtin)===norm(decoded[0]))
   if(hint){const evidence=[hint.name,hint.brand,hint.quantity,...lines.filter(l=>(l.score??0)>=.94).map(l=>l.text)].join(' ');const ranked=products.map(product=>({product,score:descriptionScore(product.description,evidence)})).filter(x=>x.score>=.55).sort((a,b)=>b.score-a.score)
