@@ -34,6 +34,7 @@
     --atomic-control:40px;
     --mobile-nav-height:calc(58px + var(--safe-bottom));
   }
+  .wk-top{height:auto}
   body{overscroll-behavior-y:none}
   .wk-top .wk-icon,.wk-top .wk-command{width:44px;height:44px;min-width:44px;border-radius:8px}
   .wk-top-leading{gap:4px}
