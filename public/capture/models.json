@@ -1,0 +1,18 @@
+[
+  {
+    "file": "detection.tar",
+    "sha256": "781056046c9ed77a15c94681605db6a0f62317c2e9cce6931c71da2478d4bc30"
+  },
+  {
+    "file": "greek.tar",
+    "sha256": "7a69b483daa1a26f9e478aa24949db10252e4cc7230d1f1d57ddf6b4dbf72cd4"
+  },
+  {
+    "file": "eng.traineddata.gz",
+    "sha256": "18c1ac52b75e35d44735fb6c2a60acfaf23033524653200738e98f0243edb75b"
+  },
+  {
+    "file": "ell.traineddata.gz",
+    "sha256": "ac762fb0b3af8e8a48776a4a8edae0e7684a52ac657f9219ef5078b4e988859e"
+  }
+]
