@@ -5,6 +5,7 @@ import './styles.css'
 import './ui/workspace.css'
 import './ui/motion.css'
 import './ui/mobile.css'
+import './ui/atomic-crm.css'
 import { installViewportEnvironment } from './ui/viewport'
 
 const disposeViewport = installViewportEnvironment()
