@@ -1,0 +1,28 @@
+name: Vendor capture models
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/vendor-capture-models.yml]
+permissions:
+  contents: write
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Download and checksum-verify pinned OCR models
+        run: npm run prepare:capture
+      - name: Commit only externally fetched pinned assets
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f public/capture/detection.tar public/capture/greek.tar public/capture/eng.traineddata.gz public/capture/ell.traineddata.gz public/capture/models.json
+          git diff --cached --quiet && exit 0
+          git commit -m 'Vendor checksum-pinned OCR models for deterministic deploys'
+          git push origin HEAD:main
