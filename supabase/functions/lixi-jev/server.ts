@@ -77,13 +77,17 @@ async function processCapture(client:DB,user:string,input:CaptureInput){
   const {data:row}=await client.from('ai_capture_runs').select('attempts').eq('id',input.id).single()
   await client.from('ai_capture_runs').update({attempts:(row?.attempts??0)+1}).eq('id',input.id)
   const response=await callJev(buildBundle(input,items,structured,hints),key)
-  const {data:committed,error:saveError}=await client.rpc('finish_jev_capture',{p_id:input.id,p_user:user,p_model:response.model,p_decision:response.decision})
-  if(saveError){
+  const plan=response.decision.plan as Record<string,unknown>|null
+  const barcodeOnly=response.decision.status==='approved'&&!!plan&&!plan.new_product&&typeof plan.barcode==='string'&&plan.price_cents==null&&plan.expiry_date==null
+  const committed=barcodeOnly
+   ? await client.rpc('commit_jev_barcode_mapping',{p_capture:input.id,p_user:user,p_model:response.model,p_decision:response.decision})
+   : await client.rpc('finish_jev_capture',{p_id:input.id,p_user:user,p_model:response.model,p_decision:response.decision})
+  if(committed.error){
    const review={...response.decision,status:'review',reasons:['catalogue_or_evidence_changed']}
    const result=await client.rpc('finish_jev_capture',{p_id:input.id,p_user:user,p_model:response.model,p_decision:review})
    if(result.error)throw new Error('commit_failed');return result.data
   }
-  return committed
+  return committed.data
  }catch(e){
   const code=allowedError(e)
   await client.from('ai_capture_runs').update({state:'failed',error_code:code,updated_at:new Date().toISOString()}).eq('id',input.id).eq('state','processing')
