@@ -21,7 +21,7 @@ export function sameGtin(a:string|null|undefined,b:string|null|undefined):boolea
   return !!a&&!!b&&normalizeGtin(a)===normalizeGtin(b)
 }
 
-export function canAcceptScan(code:string,last:{code:string;at:number}|null,now=Date.now(),cooldownMs=3500):boolean{
+export function canAcceptScan(code:string,last:{code:string;at:number}|null,now=Date.now(),cooldownMs=15000):boolean{
   return !last||last.code!==code||now-last.at>=cooldownMs
 }
 
