@@ -20,7 +20,7 @@ const navigation = [
   { id: 'settings', title: 'Ρυθμίσεις', icon: SlidersHorizontal },
 ] as const
 
-type Props = { products: ProductOverview[]; locations: Location[]; membership: Membership; email: string; loading: boolean; lastSynced: Date | null; onRefresh: () => void; onEdit: (p: ProductOverview) => void; scan: ReactNode; settings: ReactNode; toast: ReactNode }
+type Props = { products: ProductOverview[]; locations: Location[]; membership: Membership; email: string; loading: boolean; lastSynced: Date | null; onRefresh: () => void | Promise<void>; onEdit: (p: ProductOverview) => void; scan: ReactNode; settings: ReactNode; toast: ReactNode }
 export default function Workspace({ products, locations, membership, email, loading, lastSynced, onRefresh, onEdit, scan, settings, toast }: Props) {
   const [page, setPage] = useState<Page>('dashboard')
   const [filter, setFilter] = useState<Filter>('all')
