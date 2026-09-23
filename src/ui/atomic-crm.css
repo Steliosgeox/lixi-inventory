@@ -124,29 +124,29 @@
   .wk-mobile-table-tools{
     display:flex;
     align-items:center;
-    justify-content:space-between;
+    justify-content:flex-end;
     gap:8px;
     padding:6px 14px 8px;
   }
+  .wk-mobile-table-tools>label:first-child{display:none}
   .wk-mobile-table-tools label{min-height:36px;font-size:10px}
-  .wk-mobile-table-tools input{width:18px;height:18px}
   .wk-sort{margin-left:auto}
   .wk-sort select{height:36px;min-height:36px;max-width:155px;padding:4px 7px;font-size:11px}
 
   .wk-table tbody tr{
     display:grid;
-    grid-template-columns:28px minmax(0,1fr) auto;
+    grid-template-columns:minmax(0,1fr) auto;
     grid-template-areas:
-      "check product difference"
-      "check catalog shelf"
-      "check location state";
-    gap:3px 8px;
+      "product difference"
+      "catalog shelf"
+      "location state";
+    gap:3px 10px;
     padding:10px 14px;
-    min-height:78px;
+    min-height:72px;
     align-items:center;
   }
   .wk-table tbody td{font-size:11px}
-  .wk-table tbody td[data-column=select]{grid-area:check;align-self:start;padding-top:3px;overflow:visible}
+  .wk-table tbody td[data-column=select]{display:none}
   .wk-table tbody td[data-column=description]{grid-area:product;padding:0}
   .wk-table tbody td[data-column=catalog_price]{grid-area:catalog;padding:0;color:var(--muted);font-size:11px}
   .wk-table tbody td[data-column=shelf_price]{grid-area:shelf;padding:0;text-align:right;font-size:11px}
@@ -160,8 +160,7 @@
   .wk-table-product .wk-product-symbol{display:none}
   .wk-table-product strong{font-size:13px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:none}
   .wk-table-product small{font-size:10px;margin-top:1px}
-  .wk-checkbox-target{width:28px;min-width:28px;min-height:28px;display:grid;place-items:start center}
-  .wk-table input[type=checkbox]{width:18px;height:18px;margin-top:1px}
+  .wk-checkbox-target{display:none}
   .wk-location-tag,.wk-state{font-size:10px}
   .wk-state i{width:4px;height:4px}
   .wk-pagination{padding:9px 14px;font-size:10px;gap:6px}
@@ -231,7 +230,7 @@
   .wk-page-title h1{font-size:20px}
   .wk-metric{padding:10px}
   .wk-metric>strong{font-size:23px}
-  .wk-table tbody tr{padding-inline:10px;grid-template-columns:25px minmax(0,1fr) auto}
+  .wk-table tbody tr{padding-inline:10px;grid-template-columns:minmax(0,1fr) auto}
   .wk-table-product strong{font-size:12px}
   .wk-mobile-nav button{font-size:9px}
 }
