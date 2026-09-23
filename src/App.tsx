@@ -138,7 +138,7 @@ function App() {
 
   return <>
     <Workspace products={products} locations={locations} membership={membership} email={session.user.email || ''}
-      loading={loadingData} lastSynced={lastSynced} onRefresh={() => { void loadWorkspace() }} onEdit={p => { setToast(null); setEditDraft(toDraft(p)) }}
+      loading={loadingData} lastSynced={lastSynced} onRefresh={() => loadWorkspace()} onEdit={p => { setToast(null); setEditDraft(toDraft(p)) }}
       scan={membership.role === 'viewer' ? <div className="wk-empty">Ο λογαριασμός έχει πρόσβαση μόνο για ανάγνωση.</div> : <Suspense fallback={<p role="status">Φόρτωση κέντρου σάρωσης…</p>}><CaptureCenter owner={session.user.id} products={products} membership={membership} onSaved={async message => { setToast({ kind: 'ok', text: message }); await loadWorkspace(session, true) }} onError={text => setToast({ kind: 'error', text })} /></Suspense>}
       settings={<Settings session={session} membership={membership} onToast={setToast} />}
       toast={toast && <button role={toast.kind === 'error' ? 'alert' : 'status'} className={`toast ${toast.kind}`} onClick={() => setToast(null)}>{toast.text}</button>} />
